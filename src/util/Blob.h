@@ -50,4 +50,13 @@ public:
     explicit Blob(const T& t) {
         operator=(t);
     }
+
+    bool operator==(const Blob &blob) const {
+        for (int i = 0; i < wordCount; i++) {
+            if (words[i] != blob.words[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
 };
