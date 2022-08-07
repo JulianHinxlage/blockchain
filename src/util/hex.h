@@ -24,7 +24,7 @@ static uint8_t fromHex(uint8_t v) {
 }
 
 template<typename T>
-void toHex(T& data, std::string& result) {
+void toHex(const T& data, std::string& result) {
 	int size = sizeof(data);
 	result.resize(size * 2);
 	for (int i = 0; i < size; i++) {
@@ -37,7 +37,7 @@ void toHex(T& data, std::string& result) {
 }
 
 template<typename T>
-bool fromHex(std::string& data, T& result) {
+bool fromHex(const std::string& data, T& result) {
 	int size = data.size() / 2;
 	for (int i = 0; i < size; i++) {
 		uint8_t v1 = fromHex(data[i * 2 + 0]);

@@ -15,13 +15,14 @@ public:
 
 class BlockChainState {
 public:
-
 	bool serial(std::ostream& stream);
 	bool deserial(std::istream& stream);
 	Hash getHash();
 
 	AccountEntry getAccount(EccPublicKey address);
 	void setAccount(EccPublicKey address, AccountEntry account);
+
+	std::vector<std::pair<EccPublicKey, AccountEntry>> getAllAccounts();
 
 private:
 	std::vector<std::pair<EccPublicKey, AccountEntry>> entries;

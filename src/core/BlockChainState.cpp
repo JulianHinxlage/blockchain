@@ -15,6 +15,7 @@ bool BlockChainState::serial(std::ostream& stream) {
 bool BlockChainState::deserial(std::istream& stream) {
 	uint32_t count = 0;
 	stream.read((char*)&count, sizeof(count));
+	entries.resize(0);
 	entries.reserve(count);
 	for (int i = 0; i < count; i++) {
 		EccPublicKey address;
@@ -81,9 +82,14 @@ void BlockChainState::setAccount(EccPublicKey address, AccountEntry account) {
 	indexMap[address] = entries.size() - 1;
 }
 
+
 AccountEntry::AccountEntry() {
 	balance = 0;
 	nonce = 0;
+}
+
+std::vector<std::pair<EccPublicKey, AccountEntry>> BlockChainState::getAllAccounts() {
+	return entries;
 }
 
 bool AccountEntry::serial(std::ostream& stream) {

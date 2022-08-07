@@ -2,7 +2,7 @@
 #include "cryptography/sha.h"
 #include <sstream>
 
-Transaction::Transaction() {
+TransactionHeader::TransactionHeader() {
 	version = 0;
 	timestamp = 0;
 	from = 0;
@@ -14,11 +14,11 @@ Transaction::Transaction() {
 	signature = 0;
 }
 
-Transaction::Transaction(Transaction& transaction) {
+TransactionHeader::TransactionHeader(const TransactionHeader& transaction) {
 	operator=(transaction);
 }
 
-Transaction& Transaction::operator=(Transaction& transaction) {
+TransactionHeader& TransactionHeader::operator=(const TransactionHeader& transaction) {
 	version = transaction.version;
 	timestamp = transaction.timestamp;
 	from = transaction.from;
@@ -31,7 +31,7 @@ Transaction& Transaction::operator=(Transaction& transaction) {
 	return *this;
 }
 
-bool Transaction::serial(std::ostream& stream) {
+bool TransactionHeader::serial(std::ostream& stream) const {
 	stream.write((char*)&version, sizeof(version));
 	stream.write((char*)&timestamp, sizeof(timestamp));
 	stream.write((char*)&from, sizeof(from));
@@ -44,7 +44,7 @@ bool Transaction::serial(std::ostream& stream) {
 	return true;
 }
 
-bool Transaction::deserial(std::istream& stream) {
+bool TransactionHeader::deserial(std::istream& stream) {
 	stream.read((char*)&version, sizeof(version));
 	stream.read((char*)&timestamp, sizeof(timestamp));
 	stream.read((char*)&from, sizeof(from));
@@ -57,7 +57,7 @@ bool Transaction::deserial(std::istream& stream) {
 	return true;
 }
 
-bool Transaction::signSerial(std::ostream& stream) {
+bool TransactionHeader::signSerial(std::ostream& stream) const {
 	stream.write((char*)&version, sizeof(version));
 	stream.write((char*)&timestamp, sizeof(timestamp));
 	stream.write((char*)&from, sizeof(from));
@@ -69,15 +69,33 @@ bool Transaction::signSerial(std::ostream& stream) {
 	return true;
 }
 
-Hash Transaction::getHash() {
+Hash TransactionHeader::getHash() const {
 	std::stringstream stream;
 	serial(stream);
 	return sha256(stream.str());
 }
 
+void TransactionHeader::sign(const EccPrivateKey& key) {
+	std::stringstream stream;
+	signSerial(stream);
+	std::string str = stream.str();
+	signature = eccCreateSignature(str.data(), str.size(), key);
+}
 
-bool FullTransaction::serial(std::ostream& stream) {
-	transaction.serial(stream);
+bool TransactionHeader::verifySignature() const {
+	std::stringstream stream;
+	signSerial(stream);
+	std::string str = stream.str();
+	return eccVerifySignature(str.data(), str.size(), from, signature);
+}
+
+
+Transaction::Transaction() {
+	transactionHash = 0;
+}
+
+bool Transaction::serial(std::ostream& stream) const {
+	header.serial(stream);
 	uint32_t bytes = data.size();
 	stream.write((char*)&bytes, sizeof(bytes));
 	if (bytes > 0) {
@@ -86,18 +104,18 @@ bool FullTransaction::serial(std::ostream& stream) {
 	return true;
 }
 
-bool FullTransaction::deserial(std::istream& stream) {
-	transaction.deserial(stream);
+bool Transaction::deserial(std::istream& stream) {
+	header.deserial(stream);
 	uint32_t bytes = 0;
 	stream.read((char*)&bytes, sizeof(bytes));
 	data.resize(bytes);
 	if (bytes > 0) {
 		stream.read((char*)&data[0], data.size());
 	}
-	transactionHash = transaction.getHash();
+	transactionHash = header.getHash();
 	return true;
 }
 
-Hash FullTransaction::getHash() {
+Hash Transaction::getHash() const {
 	return transactionHash;
 }

@@ -3,7 +3,20 @@
 #include "type.h"
 #include <vector>
 
-class Transaction {
+enum class TransactionError {
+	NONE,
+	INVALID_VERSION,
+	INVALID_NONCE,
+	INVALID_SIGNATURE,
+	INVALID_BALANCE,
+	INVALID_FEE,
+	INVALID_KEY,
+	INVALID_HASH,
+	INVALID_FROM,
+	INVALID_TO,
+};
+
+class TransactionHeader {
 public:
 	uint16_t version;
 	uint64_t timestamp;
@@ -15,23 +28,26 @@ public:
 	uint32_t nonce;
 	EccSignature signature;
 
-	Transaction();
-	Transaction(Transaction& transaction);
-	Transaction &operator=(Transaction &transaction);
+	TransactionHeader();
+	TransactionHeader(const TransactionHeader& transaction);
+	TransactionHeader &operator=(const TransactionHeader &transaction);
 
-	bool serial(std::ostream& stream);
+	bool serial(std::ostream& stream) const;
 	bool deserial(std::istream &stream);
-	bool signSerial(std::ostream& stream);
-	Hash getHash();
+	bool signSerial(std::ostream& stream) const;
+	Hash getHash() const;
+	void sign(const EccPrivateKey& key);
+	bool verifySignature() const;
 };
 
-class FullTransaction {
+class Transaction {
 public:
-	Transaction transaction;
+	TransactionHeader header;
 	Hash transactionHash;
 	std::vector<uint8_t> data;
 
-	bool serial(std::ostream& stream);
+	Transaction();
+	bool serial(std::ostream& stream) const;
 	bool deserial(std::istream& stream);
-	Hash getHash();
+	Hash getHash() const;
 };

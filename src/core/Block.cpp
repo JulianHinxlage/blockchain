@@ -2,7 +2,7 @@
 #include "cryptography/sha.h"
 #include <sstream>
 
-Block::Block() {
+BlockHeader::BlockHeader() {
 	version = 0;
 	timestamp = 0;
 	previousBlock = 0;
@@ -14,7 +14,7 @@ Block::Block() {
 	signature = 0;
 }
 
-bool Block::serial(std::ostream& stream) {
+bool BlockHeader::serial(std::ostream& stream) const {
 	stream.write((char*)&version, sizeof(version));
 	stream.write((char*)&timestamp, sizeof(timestamp));
 	stream.write((char*)&previousBlock, sizeof(previousBlock));
@@ -27,7 +27,7 @@ bool Block::serial(std::ostream& stream) {
 	return true;
 }
 
-bool Block::deserial(std::istream& stream) {
+bool BlockHeader::deserial(std::istream& stream) {
 	stream.read((char*)&version, sizeof(version));
 	stream.read((char*)&timestamp, sizeof(timestamp));
 	stream.read((char*)&previousBlock, sizeof(previousBlock));
@@ -40,7 +40,7 @@ bool Block::deserial(std::istream& stream) {
 	return true;
 }
 
-bool Block::signSerial(std::ostream& stream) {
+bool BlockHeader::signSerial(std::ostream& stream) const {
 	stream.write((char*)&version, sizeof(version));
 	stream.write((char*)&timestamp, sizeof(timestamp));
 	stream.write((char*)&previousBlock, sizeof(previousBlock));
@@ -52,32 +52,50 @@ bool Block::signSerial(std::ostream& stream) {
 	return true;
 }
 
-Hash Block::getHash() {
+Hash BlockHeader::getHash() const {
 	std::stringstream stream;
 	serial(stream);
 	return sha256(stream.str());
 }
 
+void BlockHeader::sign(const EccPrivateKey& key) {
+	std::stringstream stream;
+	signSerial(stream);
+	std::string str = stream.str();
+	signature = eccCreateSignature(str.data(), str.size(), key);
+}
 
-bool FullBlock::serial(std::ostream& stream) {
-	block.serial(stream);
+bool BlockHeader::verifySignature() const {
+	std::stringstream stream;
+	signSerial(stream);
+	std::string str = stream.str();
+	return eccVerifySignature(str.data(), str.size(), validator, signature);
+}
+
+
+Block::Block() {
+	blockHash = 0;
+}
+
+bool Block::serial(std::ostream& stream) const {
+	header.serial(stream);
 	transactionTree.serial(stream);
 	return true;
 }
 
-bool FullBlock::deserial(std::istream& stream) {
-	block.deserial(stream);
+bool Block::deserial(std::istream& stream) {
+	header.deserial(stream);
 	transactionTree.deserial(stream);
-	blockHash = block.getHash();
+	blockHash = header.getHash();
 	return true;
 }
 
-Hash FullBlock::getHash() {
+Hash Block::getHash() const {
 	return blockHash;
 }
 
 
-bool TransactionTree::serial(std::ostream& stream) {
+bool TransactionTree::serial(std::ostream& stream) const {
 	uint32_t count = transactionHashes.size();
 	stream.write((char*)&count, sizeof(count));
 	for (int i = 0; i < count; i++) {
@@ -96,7 +114,7 @@ bool TransactionTree::deserial(std::istream& stream) {
 	return true;
 }
 
-Hash TransactionTree::getHash() {
+Hash TransactionTree::getHash() const {
 	//generate merkle tree root hash
 	std::vector<Hash> hashes = transactionHashes;
 	while (hashes.size() > 1) {

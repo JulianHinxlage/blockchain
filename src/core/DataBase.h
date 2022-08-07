@@ -10,21 +10,22 @@ public:
 	void init(const std::string& path, BlockChain *chain);
 	const std::string& getDataPath();
 
+	bool getTransactionHeader(Hash transactionHash, TransactionHeader &transaction);
 	bool getTransaction(Hash transactionHash, Transaction &transaction);
-	bool getFullTransaction(Hash transactionHash, FullTransaction &transaction);
+	bool getBlockHeader(Hash blockHash, BlockHeader& block);
 	bool getBlock(Hash blockHash, Block& block);
-	bool getFullBlock(Hash blockHash, FullBlock& block);
 
-	void addTransaction(FullTransaction& transaction);
-	void addBlock(FullBlock& block);
+	void addTransaction(const Transaction& transaction);
+	void addBlock(const Block& block);
+	void load();
 	void save();
 
 private:
 	std::string dataPath;
 	BlockChain* chain;
 
-	std::unordered_map<Hash, FullBlock> blocks;
-	std::unordered_map<Hash, FullTransaction> transactions;
+	std::unordered_map<Hash, Block> blocks;
+	std::unordered_map<Hash, Transaction> transactions;
 
 	void loadChain();
 	void saveChain();

@@ -16,6 +16,8 @@ void DataBase::init(const std::string& path, BlockChain* chain) {
 			dataPath += "/";
 		}
 	}
+	std::filesystem::create_directories(path);
+
 	loadChain();
 	loadTransactions();
 	loadBlocks();
@@ -26,10 +28,10 @@ const std::string& DataBase::getDataPath() {
 	return dataPath;
 }
 
-bool DataBase::getTransaction(Hash transactionHash, Transaction &transaction) {
+bool DataBase::getTransactionHeader(Hash transactionHash, TransactionHeader &transaction) {
 	auto entry = transactions.find(transactionHash);
 	if (entry != transactions.end()) {
-		transaction = entry->second.transaction;
+		transaction = entry->second.header;
 		return true;
 	}
 	else {
@@ -37,7 +39,7 @@ bool DataBase::getTransaction(Hash transactionHash, Transaction &transaction) {
 	}
 }
 
-bool DataBase::getFullTransaction(Hash transactionHash, FullTransaction& transaction) {
+bool DataBase::getTransaction(Hash transactionHash, Transaction& transaction) {
 	auto entry = transactions.find(transactionHash);
 	if (entry != transactions.end()) {
 		transaction = entry->second;
@@ -48,10 +50,10 @@ bool DataBase::getFullTransaction(Hash transactionHash, FullTransaction& transac
 	}
 }
 
-bool DataBase::getBlock(Hash blockHash, Block& block) {
+bool DataBase::getBlockHeader(Hash blockHash, BlockHeader& block) {
 	auto entry = blocks.find(blockHash);
 	if (entry != blocks.end()) {
-		block = entry->second.block;
+		block = entry->second.header;
 		return true;
 	}
 	else {
@@ -59,7 +61,7 @@ bool DataBase::getBlock(Hash blockHash, Block& block) {
 	}
 }
 
-bool DataBase::getFullBlock(Hash blockHash, FullBlock& block) {
+bool DataBase::getBlock(Hash blockHash, Block& block) {
 	auto entry = blocks.find(blockHash);
 	if (entry != blocks.end()) {
 		block = entry->second;
@@ -70,18 +72,25 @@ bool DataBase::getFullBlock(Hash blockHash, FullBlock& block) {
 	}
 }
 
-void DataBase::addTransaction(FullTransaction& transaction) {
+void DataBase::addTransaction(const Transaction& transaction) {
 	auto entry = transactions.find(transaction.transactionHash);
 	if (entry == transactions.end()) {
 		transactions[transaction.transactionHash] = transaction;
 	}
 }
 
-void DataBase::addBlock(FullBlock& block) {
+void DataBase::addBlock(const Block& block) {
 	auto entry = blocks.find(block.blockHash);
 	if (entry == blocks.end()) {
 		blocks[block.blockHash] = block;
 	}
+}
+
+void DataBase::load() {
+	loadChain();
+	loadTransactions();
+	loadBlocks();
+	loadState();
 }
 
 void DataBase::save() {
@@ -97,6 +106,8 @@ void DataBase::loadChain() {
 	if (std::filesystem::exists(file)) {
 		std::ifstream stream;
 		stream.open(file);
+
+		chain->blocks.clear();
 
 		std::string line;
 		while (std::getline(stream, line)) {
@@ -133,14 +144,16 @@ void DataBase::loadBlocks() {
 	std::string file = dataPath + "blocks.txt";
 	if (std::filesystem::exists(file)) {
 		std::ifstream stream;
-		stream.open(file);
+		stream.open(file, std::ifstream::binary);
+
+		blocks.clear();
 
 		uint32_t count = 0;
 		stream.read((char*)&count, sizeof(count));
 		blocks.reserve(count);
 
 		for (int i = 0; i < count; i++) {
-			FullBlock block;
+			Block block;
 			block.deserial(stream);
 			blocks[block.getHash()] = block;
 		}
@@ -152,7 +165,7 @@ void DataBase::loadBlocks() {
 void DataBase::saveBlocks() {
 	std::string file = dataPath + "blocks.txt";
 	std::ofstream stream;
-	stream.open(file);
+	stream.open(file, std::ofstream::binary);
 
 	uint32_t count = blocks.size();
 	stream.write((char*)&count, sizeof(count));
@@ -168,14 +181,15 @@ void DataBase::loadTransactions() {
 	std::string file = dataPath + "transactions.txt";
 	if (std::filesystem::exists(file)) {
 		std::ifstream stream;
-		stream.open(file);
+		stream.open(file, std::ifstream::binary);
+
+		transactions.clear();
 
 		uint32_t count = 0;
 		stream.read((char*)&count, sizeof(count));
-		transactions.reserve(count);
 
 		for (int i = 0; i < count; i++) {
-			FullTransaction transaction;
+			Transaction transaction;
 			transaction.deserial(stream);
 			transactions[transaction.getHash()] = transaction;
 		}
@@ -187,7 +201,7 @@ void DataBase::loadTransactions() {
 void DataBase::saveTransactions() {
 	std::string file = dataPath + "transactions.txt";
 	std::ofstream stream;
-	stream.open(file);
+	stream.open(file, std::ofstream::binary);
 
 	uint32_t count = transactions.size();
 	stream.write((char*)&count, sizeof(count));
@@ -203,7 +217,7 @@ void DataBase::loadState() {
 	std::string file = dataPath + "state.txt";
 	if (std::filesystem::exists(file)) {
 		std::ifstream stream;
-		stream.open(file);
+		stream.open(file, std::ifstream::binary);
 
 		chain->state.deserial(stream);
 		stream.close();
@@ -213,7 +227,7 @@ void DataBase::loadState() {
 void DataBase::saveState() {
 	std::string file = dataPath + "state.txt";
 	std::ofstream stream;
-	stream.open(file);
+	stream.open(file, std::ofstream::binary);
 
 	chain->state.serial(stream);
 	stream.close();

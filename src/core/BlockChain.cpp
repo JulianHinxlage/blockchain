@@ -1,4 +1,6 @@
 #include "BlockChain.h"
+#include "cryptography/sha.h"
+#include <time.h>
 
 BlockChain::BlockChain() {
 
@@ -8,7 +10,7 @@ int BlockChain::getBlockCount() {
 	return blocks.size();
 }
 
-Hash BlockChain::getLatest() {
+Hash BlockChain::getLatestBlock() {
 	if (blocks.size() > 0) {
 		return blocks.back();
 	}

@@ -3,7 +3,24 @@
 #include "Transaction.h"
 #include <unordered_map>
 
-class Block {
+
+enum class BlockError {
+	NONE,
+	INVALID_VERSION,
+	INVALID_PREVIOUS,
+	INVALID_BLOCK_NUMBER,
+	INVALID_SIGNATURE,
+	INVALID_STATE,
+	INVALID_HASH,
+	INVALID_BENEFICIARY,
+	INVALID_VALIDATOR,
+	INVALID_TRANSACTION_ROOT,
+	INVALID_KEY,
+	INVALID_FEE,
+	INVALID_TRANSACTION,
+};
+
+class BlockHeader {
 public:
 	uint16_t version;
 	uint64_t timestamp;
@@ -15,30 +32,33 @@ public:
 	Hash stateRoot;
 	EccSignature signature;
 
-	Block();
+	BlockHeader();
 
-	bool serial(std::ostream& stream);
+	bool serial(std::ostream& stream) const;
 	bool deserial(std::istream& stream);
-	bool signSerial(std::ostream& stream);
-	Hash getHash();
+	bool signSerial(std::ostream& stream) const;
+	Hash getHash() const;
+	void sign(const EccPrivateKey& key);
+	bool verifySignature() const;
 };
 
 class TransactionTree {
 public:
 	std::vector<Hash> transactionHashes;
 
-	bool serial(std::ostream& stream);
+	bool serial(std::ostream& stream) const;
 	bool deserial(std::istream& stream);
-	Hash getHash();
+	Hash getHash() const;
 };
 
-class FullBlock {
+class Block {
 public:
-	Block block;
+	BlockHeader header;
 	Hash blockHash;
 	TransactionTree transactionTree;
 
-	bool serial(std::ostream& stream);
+	Block();
+	bool serial(std::ostream& stream) const;
 	bool deserial(std::istream& stream);
-	Hash getHash();
+	Hash getHash() const;
 };
