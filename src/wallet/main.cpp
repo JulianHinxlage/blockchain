@@ -1,4 +1,3 @@
-
 #include "core/Node.h"
 #include "Wallet.h"
 #include "util/hex.h"
@@ -75,7 +74,6 @@ bool loadFile(Wallet &wallet) {
             }
         }
     }
-
     return true;
 }
 
@@ -86,8 +84,9 @@ int main(int argc, char* args[]) {
         node.db.save();
     }
 
-	Wallet wallet;
+    printf("\n");
 
+	Wallet wallet;
     if (!loadFile(wallet)) {
         return 0;
     }
@@ -160,7 +159,7 @@ int main(int argc, char* args[]) {
                 }
                 else if (parts[0] == "cutchain") {
                     uint32_t num = -1;
-                    if (parts.size() >= 1) {
+                    if (parts.size() >= 2) {
                         try {
                             num = std::stoi(parts[1]);
                         }
@@ -223,6 +222,8 @@ int main(int argc, char* args[]) {
                             if (node.db.getTransactionHeader(hash, transaction)) {
                                 printf("transaction %i\n", index++);
                                 std::string str;
+                                toHex(hash, str);
+                                printf("  hash:   %s\n", str.c_str());
                                 toHex(transaction.from, str);
                                 printf("  from:   %s\n", str.c_str());
                                 toHex(transaction.to, str);
@@ -230,8 +231,6 @@ int main(int argc, char* args[]) {
                                 printf("  amount: %i\n", (int)transaction.amount);
                                 printf("  fee:    %i\n", (int)transaction.fee);
                                 printf("  time:   %i\n", (int)transaction.timestamp);
-                                toHex(hash, str);
-                                printf("  hash:   %s\n", str.c_str());
                                 printf("  block:  %i\n", i);
                             }
                         }
@@ -249,6 +248,5 @@ int main(int argc, char* args[]) {
             }
 		}
 	}
-
 	return 0;
 }

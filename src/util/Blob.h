@@ -51,12 +51,135 @@ public:
         operator=(t);
     }
 
-    bool operator==(const Blob &blob) const {
-        for (int i = 0; i < wordCount; i++) {
-            if (words[i] != blob.words[i]) {
+    bool operator==(const Blob& blob) const {
+        for (int i = 0; i < byteCount; i++) {
+            if (bytes[i] != blob.bytes[i]) {
                 return false;
             }
         }
         return true;
+    }
+
+    bool operator!=(const Blob& blob) const {
+        return !operator==(blob);
+    }
+
+    bool operator<(const Blob& blob) const {
+        for (int i = byteCount - 1; i >= 0; i--) {
+            if (bytes[i] < blob.bytes[i]) {
+                return true;
+            }
+            else if (bytes[i] > blob.bytes[i]) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    bool operator>(const Blob& blob) const {
+        for (int i = byteCount - 1; i >= 0; i--) {
+            if (bytes[i] > blob.bytes[i]) {
+                return true;
+            }
+            else if (bytes[i] < blob.bytes[i]) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    bool operator<=(const Blob& blob) const {
+        return !operator>(blob);
+    }
+
+    bool operator>=(const Blob& blob) const {
+        return !operator<(blob);
+    }
+
+    Blob operator&(const Blob& blob) const {
+        Blob result;
+        for (int i = 0; i < byteCount; i++) {
+            result.bytes[i] = bytes[i] & blob.bytes[i];
+        }
+        return result;
+    }
+
+    Blob operator|(const Blob& blob) const {
+        Blob result;
+        for (int i = 0; i < byteCount; i++) {
+            result.bytes[i] = bytes[i] | blob.bytes[i];
+        }
+        return result;
+    }
+
+    Blob operator^(const Blob& blob) const {
+        Blob result;
+        for (int i = 0; i < byteCount; i++) {
+            result.bytes[i] = bytes[i] ^ blob.bytes[i];
+        }
+        return result;
+    }
+
+    Blob operator~() const {
+        Blob result;
+        for (int i = 0; i < byteCount; i++) {
+            result.bytes[i] = ~bytes[i];
+        }
+        return result;
+    }
+
+    Blob& operator&=(const Blob& blob) {
+        *this = *this & blob;
+        return *this;
+    }
+
+    Blob& operator|=(const Blob& blob) {
+        *this = *this | blob;
+        return *this;
+    }
+
+    Blob& operator^=(const Blob& blob) {
+        *this = *this ^ blob;
+        return *this;
+    }
+
+    Blob operator<<(int shift) {
+        Blob result(0);
+        int byteShift = shift / 8;
+        int bitShift = shift % 8;
+        for (int i = 0; i < byteCount; i++) {
+            if (i - byteShift >= 0) {
+                if (bitShift == 0) {
+                    result.bytes[i] = bytes[i - byteShift];
+                }
+                else {
+                    result.bytes[i] = (bytes[i - byteShift] << bitShift);
+                    if (i - byteShift - 1 >= 0) {
+                        result.bytes[i] |= (bytes[i - byteShift - 1] >> (8 - bitShift));
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    Blob operator>>(int shift) {
+        Blob result(0);
+        int byteShift = shift / 8;
+        int bitShift = shift % 8;
+        for (int i = 0; i < byteCount; i++) {
+            if (i + byteShift < byteCount) {
+                if (bitShift == 0) {
+                    result.bytes[i] = bytes[i + byteShift];
+                }
+                else {
+                    result.bytes[i] = (bytes[i + byteShift] >> bitShift);
+                    if (i + byteShift + 1 < byteCount) {
+                        result.bytes[i] |= (bytes[i + byteShift + 1] << (8 - bitShift));
+                    }
+                }
+            }
+        }
+        return result;
     }
 };
