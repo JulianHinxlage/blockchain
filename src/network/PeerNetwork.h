@@ -36,6 +36,8 @@ public:
 	void send(const std::string& msg, PeerId target);
 	void broadcast(const std::string& msg);
 
+	PeerId getRandomNeighbor();
+
 private:
 	std::vector<Endpoint> entryNodes;
 	Listener listener;

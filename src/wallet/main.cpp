@@ -1,121 +1,106 @@
 #include "core/Node.h"
 #include "Wallet.h"
+#include "core/ChainNetwork.h"
 #include "util/hex.h"
+#include "util/strutil.h"
 #include <iostream>
 #include <filesystem>
 
-std::vector<std::string> split(const std::string& string, const std::string& delimiter, bool includeEmpty = true) {
-    std::vector<std::string> parts;
-    std::string token;
-    int delimiterIndex = 0;
-    for (char c : string) {
-        if ((int)delimiter.size() == 0) {
-            parts.push_back({ c, 1 });
-        }
-        else if (c == delimiter[delimiterIndex]) {
-            delimiterIndex++;
-            if (delimiterIndex == delimiter.size()) {
-                if (includeEmpty || (int)token.size() != 0) {
-                    parts.push_back(token);
-                }
-                token.clear();
-                delimiterIndex = 0;
-            }
-        }
-        else {
-            token += delimiter.substr(0, delimiterIndex);
-            token.push_back(c);
-            delimiterIndex = 0;
-        }
-    }
-    token += delimiter.substr(0, delimiterIndex);
-    if (includeEmpty || (int)token.size() != 0) {
-        parts.push_back(token);
-    }
-    return parts;
-}
-
-bool loadFile(Wallet &wallet) {
-    std::vector<std::string> files;
-    for (auto& file : std::filesystem::directory_iterator("..\\wallets")) {
-        printf("(%i) %s\n", (int)files.size(), file.path().filename().string().c_str());
-        files.push_back(file.path().string());
-    }
-    printf("(%i) new\n", (int)files.size());
-
-    printf("select number> ");
-    std::string line;
-    if (std::getline(std::cin, line)) {
-        if (line == "exit") {
-            return false;
-        }
-
-        int num = -1;
-        try {
-            num = std::stoi(line);
-        }
-        catch (...) {
-            printf("invalid number\n");
-        }
-        if (num != -1) {
-            if (num >= 0 && num < files.size()) {
-                if (!wallet.init(files[num])) {
-                    wallet.createKey();
-                }
-            }
-            else if (num == files.size()) {
-                printf("file> ");
-                if (std::getline(std::cin, line)) {
-                    line = std::string("..\\wallets\\") + line;
-                    if (!wallet.init(line)) {
-                        wallet.createKey();
-                    }
-                }
-            }
-        }
-    }
-    return true;
-}
-
 int main(int argc, char* args[]) {
-	Node node;
-	node.init("..\\chainData\\", true);
+    Node node;
+    ChainNetwork network;
+    network.db = &node.db;
+    network.chain = &node.chain;
+    Wallet wallet;
+
+    if (!wallet.init(wallet.selectFile("../wallets"))) {
+        wallet.createKey();
+    }
+
+    std::string directory = wallet.selectDirectory("../chains");
+    if (directory.empty()) {
+        return 0;
+    }
+
+    node.init(directory, true);
     if (!node.validateChain(true, 2)) {
         node.db.save();
     }
 
+    network.network.logCallback = [&](const std::string& msg, int level) {
+        if (level > 0) {
+            printf("log: %s\n", msg.c_str());
+        }
+    };
+
+    network.init("../entryNodes.txt");
+
+    network.onBlockReceived = [&](const Block& block) {
+        if (block.blockHash == block.header.getHash()) {
+            std::string str;
+            toHex(block.blockHash, str);
+            BlockError error = node.validator.validateBlock(block);
+
+            if (error == BlockError::NONE) {
+                printf("block: %s\n", str.c_str());
+                node.chain.addBlock(block);
+                node.db.save();
+            }
+            else {
+                printf("invalid block: %s with code %i\n", str.c_str(), error);
+            }
+        }
+    };
+    network.onTransactionReceived = [&](const Transaction& transaction, bool partOfBlock) {
+        if (transaction.transactionHash == transaction.header.getHash()) {
+            if (!partOfBlock) {
+                std::string str;
+                toHex(transaction.transactionHash, str);
+                printf("tx: %s\n", str.c_str());
+            }
+            node.db.addTransaction(transaction);
+        }
+    };
+
+
+
+
+    printf("\n");
+    {
+        std::string str;
+        toHex(node.chain.getLatestBlock(), str);
+        printf("chain head block %i hash %s\n", node.chain.getBlockCount() - 1, str.c_str());
+    }
+    network.syncChain();
+    {
+        std::string str;
+        toHex(node.chain.getLatestBlock(), str);
+        printf("chain head block %i hash %s\n", node.chain.getBlockCount() - 1, str.c_str());
+    }
     printf("\n");
 
-	Wallet wallet;
-    if (!loadFile(wallet)) {
-        return 0;
-    }
 
-	while (true) {
-		std::string line;
+    while (true) {
+        std::string line;
         printf("> ");
-		if (std::getline(std::cin, line)) {
-            auto parts = split(line, " ", false);
+        if (std::getline(std::cin, line)) {
+            auto parts = strSplit(line, " ", false);
 
             if (parts.size() > 0) {
                 if (parts[0] == "exit") {
                     break;
                 }
                 else if (parts[0] == "info") {
-                    node.db.load();
-                    node.validateChain(true, 1);
 
                     AccountEntry account = node.chain.state.getAccount(wallet.publicKey);
                     std::string str;
                     toHex(wallet.publicKey, str);
-                    printf("address: %s\n", str.c_str());
-                    printf("balance: %i\n", (int)account.balance);
-                    printf("nonce:   %i\n", (int)account.nonce);
+                    printf("address:      %s\n", str.c_str());
+                    printf("balance:      %i\n", (int)account.balance);
+                    printf("transactions: %i\n", (int)account.nonce);
                 }
                 else if (parts[0] == "send") {
                     if (parts.size() >= 3) {
-                        node.db.load();
-                        node.validateChain(true, 1);
 
                         EccPublicKey to;
                         fromHex(parts[1], to);
@@ -143,9 +128,8 @@ int main(int argc, char* args[]) {
                             printf("transaction failed with code %i\n", error);
                         }
                         else {
-                            node.creator.addTransaction(transaction);
-                            node.creator.createBlock(wallet.publicKey, wallet.publicKey, wallet.privateKey);
-                            node.db.save();
+                            network.broadcastTransaction(transaction);
+                            node.db.addTransaction(transaction);
                         }
                     }
                     else {
@@ -153,8 +137,8 @@ int main(int argc, char* args[]) {
                     }
                 }
                 else if (parts[0] == "load") {
-                    if (!loadFile(wallet)) {
-                        return 0;
+                    if (!wallet.init(wallet.selectFile("../wallets"))) {
+                        wallet.createKey();
                     }
                 }
                 else if (parts[0] == "cutchain") {
@@ -176,8 +160,6 @@ int main(int argc, char* args[]) {
                     }
                 }
                 else if (parts[0] == "accounts") {
-                    node.db.load();
-                    node.validateChain(true, 1);
 
                     Amount sum = 0;
                     for (auto& acc : node.chain.state.getAllAccounts()) {
@@ -189,8 +171,6 @@ int main(int argc, char* args[]) {
                     printf("sum of balances: %i\n", (int)sum);
                 }
                 else if (parts[0] == "blocks") {
-                    node.db.load();
-                    node.validateChain(true, 1);
 
                     for (int i = 0; i < node.chain.getBlockCount(); i++) {
                         Block block;
@@ -207,8 +187,6 @@ int main(int argc, char* args[]) {
                     }
                 }
                 else if (parts[0] == "transactions") {
-                    node.db.load();
-                    node.validateChain(true, 1);
 
                     int index = 0;
                     for (int i = 0; i < node.chain.getBlockCount(); i++) {
@@ -246,7 +224,9 @@ int main(int argc, char* args[]) {
             else {
                 printf("unknown command\n");
             }
-		}
-	}
-	return 0;
+        }
+    }
+
+    network.shutdown();
+    return 0;
 }

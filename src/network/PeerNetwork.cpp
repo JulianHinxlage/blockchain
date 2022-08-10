@@ -1,6 +1,6 @@
 #include "PeerNetwork.h"
 #include "util/hex.h"
-#include <random>
+#include "util/random.h"
 
 /*
 -- Legend -- 
@@ -19,22 +19,6 @@ MESSAGE			msg(str)
 BORADCAST		source(128) nonce(128) msg(str)
 DISCONNECT
 */
-
-template<typename T>
-void randomBytes(T &t) {
-	static std::mt19937 mt;
-	static bool init = false;
-	if (!init) {
-		mt.seed(std::random_device()());
-		init = true;
-	}
-	
-	using Word = unsigned int;
-	int count = sizeof(T) / sizeof(Word);
-	for (int i = 0; i < count; i++) {
-		*(((Word*)&t) + i) = mt();
-	}
-}
 
 const char* getOpcodeName(PeerNetwork::Opcode opcode) {
 	switch (opcode) {
@@ -223,7 +207,8 @@ void PeerNetwork::send(const std::string& msg, PeerId target) {
 	packet.add(target);
 	packet.add(uint8_t(1));
 	packet.add(Opcode::MESSAGE);
-	packet.addStr(msg);
+	packet.add(msg.data(), msg.size());
+
 	sendPacket(packet, target);
 }
 
@@ -234,7 +219,7 @@ void PeerNetwork::broadcast(const std::string& msg) {
 	randomBytes(nonce);
 	packet.add(routingTable.localPeer->id);
 	packet.add(nonce);
-	packet.addStr(msg);
+	packet.add(msg.data(), msg.size());
 
 	broadcastNonces.insert(nonce);
 	for(auto &peer : routingTable.peers) {
@@ -452,3 +437,12 @@ void PeerNetwork::processPacket(const std::string& msg, Peer* peer, PeerId msgSo
 
 }
 
+PeerId PeerNetwork::getRandomNeighbor() {
+	if (routingTable.peers.size() > 0) {
+		int index = randomBytes<uint32_t>() % routingTable.peers.size();
+		return routingTable.peers[index]->id;
+	}
+	else {
+		return PeerId(0);
+	}
+}

@@ -14,4 +14,6 @@ public:
 	BlockChain();
 	int getBlockCount();
 	Hash getLatestBlock();
+
+	void addBlock(const Block &block);
 };

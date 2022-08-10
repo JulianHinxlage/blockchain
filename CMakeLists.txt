@@ -20,6 +20,12 @@ add_executable(${PROJECT_NAME} ${SOURCES})
 include_directories(${PROJECT_NAME} PUBLIC src)
 target_link_libraries(${PROJECT_NAME} PUBLIC Core)
 
+project(Validator)
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/validator/*.cpp src/wallet/Wallet.cpp)
+add_executable(${PROJECT_NAME} ${SOURCES})
+include_directories(${PROJECT_NAME} PUBLIC src)
+target_link_libraries(${PROJECT_NAME} PUBLIC Core)
+
 project(Test)
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/test/*.cpp)
 add_executable(${PROJECT_NAME} ${SOURCES})
