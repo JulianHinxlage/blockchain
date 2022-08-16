@@ -72,6 +72,7 @@ private:
 	Buffer buffer;
 	std::vector<std::shared_ptr<std::ifstream>> readStreams;
 	std::ofstream writeStream;
+	int writeStreamFileSize;
 
 	uint64_t maxFileSize;
 	int currentWriteFileIndex;

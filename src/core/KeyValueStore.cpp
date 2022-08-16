@@ -60,9 +60,19 @@ void KeyValueStore::init(const std::string& directory, int version, uint64_t max
 			if (i == 0) {
 				lastFile = file;
 				currentWriteFileIndex = 0;
+
+				std::shared_ptr<std::ifstream> readStream = std::make_shared<std::ifstream>();
+				readStream->open(file, std::ios_base::binary);
+				readStreams.push_back(readStream);
 			}
 			break;
 		}
+	}
+	if (std::filesystem::exists(lastFile)) {
+		writeStreamFileSize = std::filesystem::file_size(lastFile);
+	}
+	else {
+		writeStreamFileSize = 0;
 	}
 	writeStream.open(lastFile, std::ios_base::app | std::ios_base::binary);
 }
@@ -74,21 +84,29 @@ bool KeyValueStore::set(const Key& key, const Key& value) {
 		entry.fileId = currentWriteFileIndex;
 		entry.keySize = key.size;
 		entry.valueSize = value.size;
-		entry.offset = writeStream.tellp();
+		entry.offset = writeStreamFileSize;
 
 		if (entry.offset + value.size > maxFileSize) {
 			currentWriteFileIndex++;
 			std::string file = directory + "/" + "data" + std::to_string(currentWriteFileIndex) + ".dat";
 			writeStream.close();
+			if (std::filesystem::exists(file)) {
+				writeStreamFileSize = std::filesystem::file_size(file);
+			}
+			else {
+				writeStreamFileSize = 0;
+			}
 			writeStream.open(file, std::ios_base::app | std::ios_base::binary);
+			writeStreamFileSize = writeStream.tellp();
 			entry.fileId = currentWriteFileIndex;
-			entry.offset = writeStream.tellp();
+			entry.offset = writeStreamFileSize;
 		}
 
 		writeStream.write((char*)key.ptr, key.size);
 		writeStream.write((char*)value.ptr, value.size);
 		index.add(key, entry);
 		writeStream.flush();
+		writeStreamFileSize += key.size + value.size;
 		return true;
 	}
 	else {
@@ -97,19 +115,14 @@ bool KeyValueStore::set(const Key& key, const Key& value) {
 }
 
 bool KeyValueStore::getPair(const Index::Entry& entry, Key& key, Value& value) {
-	if (entry.fileId != -1) {
-		if (entry.fileId >= 0 && entry.fileId < readStreams.size()) {
-			auto* readStream = readStreams[entry.fileId].get();
-			readStream->seekg(entry.offset);
-			buffer.resize(entry.keySize + entry.valueSize, 0);
-			readStream->read((char*)buffer.data(), buffer.size());
-			key = Key(buffer.data(), entry.keySize);
-			value = Value(buffer.data() + entry.keySize, entry.valueSize);
-			return true;
-		}
-		else {
-			return false;
-		}
+	if (entry.fileId >= 0 && entry.fileId < readStreams.size()) {
+		auto* readStream = readStreams[entry.fileId].get();
+		readStream->seekg(entry.offset);
+		buffer.resize(entry.keySize + entry.valueSize, 0);
+		readStream->read((char*)buffer.data(), buffer.size());
+		key = Key(buffer.data(), entry.keySize);
+		value = Value(buffer.data() + entry.keySize, entry.valueSize);
+		return true;
 	}
 	else {
 		return false;
@@ -148,13 +161,15 @@ void KeyValueStore::Index::load(const std::string& file, int version) {
 		}
 
 		while (!istream.eof()) {
-			Entry entry;
+			Entry entry = {-1, 0, 0, 0};
 			int size = 0;
 			istream.read((char*)&size, sizeof(size));
-			buffer.resize(size, 0);
-			istream.read((char*)buffer.data(), size);
-			istream.read((char*)&entry, sizeof(entry));
-			entries[buffer.toString()] = entry;
+			if (size != 0) {
+				buffer.resize(size, 0);
+				istream.read((char*)buffer.data(), size);
+				istream.read((char*)&entry, sizeof(entry));
+				entries[buffer.toString()] = entry;
+			}
 		}
 		istream.close();
 	}
@@ -180,7 +195,7 @@ void KeyValueStore::Index::add(const Key& key, const Entry& entry) {
 KeyValueStore::Index::Entry KeyValueStore::Index::get(const Key& key) {
 	auto entry = entries.find(key.toString());
 	if (entry == entries.end()) {
-		return { -1, -1, 0 };
+		return { -1, 0, 0, 0 };
 	}
 	else {
 		return entry->second;
