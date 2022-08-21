@@ -11,11 +11,9 @@ bool Node::init(const std::string& dataDirectory, bool verbose) {
 
 	if (chain.blocks.size() == 0) {
 		//create chain with genesis block
-		Block block;
-		BlockChainState state;
-		chain.config.createGenesis(block, state);
+		Block block = chain.config.getGenesisBlock();
 
-		if (block.blockHash != chain.config.genesisBlockHash) {
+		if (block.blockHash != chain.config.getGenesisBlockHash()) {
 			if (verbose) {
 				printf("genesis block hash mismatch\n");
 			}
@@ -32,7 +30,7 @@ bool Node::init(const std::string& dataDirectory, bool verbose) {
 
 		chain.db->addBlock(block);
 		chain.blocks.push_back(block.getHash());
-		chain.state = state;
+		chain.config.getGenesisState(chain.state);
 	}
 	return true;
 }
@@ -66,9 +64,8 @@ bool Node::validateChain(bool reduceChainToValid, int verbose) {
 			valid = false;
 		}
 
-		if (block.getHash() == chain.config.genesisBlockHash) {
-			Block genesis;
-			chain.config.createGenesis(genesis, chain.state);
+		if (block.getHash() == chain.config.getGenesisBlockHash()) {
+			chain.config.getGenesisState(chain.state);
 		}
 
 		if (!valid) {
@@ -77,6 +74,11 @@ bool Node::validateChain(bool reduceChainToValid, int verbose) {
 		else {
 			validBlockCount++;
 		}
+	}
+
+	if (validBlockCount == 0) {
+		Block genesis = chain.config.getGenesisBlock();
+		chain.addBlock(genesis);
 	}
 
 	if (valid) {

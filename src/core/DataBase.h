@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BlockChain.h"
+#include "CachedKeyValueStore.h"
 #include <string>
 #include <unordered_map>
 
@@ -24,15 +25,9 @@ private:
 	std::string dataPath;
 	BlockChain* chain;
 
-	std::unordered_map<Hash, Block> blocks;
-	std::unordered_map<Hash, Transaction> transactions;
+	CachedKeyValueStore blockStore;
+	CachedKeyValueStore transactionStore;
 
 	void loadChain();
 	void saveChain();
-	void loadBlocks();
-	void saveBlocks();
-	void loadTransactions();
-	void saveTransactions();
-	void loadState();
-	void saveState();
 };

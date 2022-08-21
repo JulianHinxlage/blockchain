@@ -1,30 +1,33 @@
 #pragma once
 
 #include "type.h"
+#include "BinaryTree.h"
+#include "CachedKeyValueStore.h"
 #include <unordered_map>
 
-class AccountEntry {
+class Account {
 public:
 	Amount balance;
 	uint32_t nonce;
+	Hash code;
+	Hash storage;
 
-	AccountEntry();
+	Account();
 	bool serial(std::ostream& stream);
 	bool deserial(std::istream& stream);
 };
 
 class BlockChainState {
 public:
-	bool serial(std::ostream& stream);
-	bool deserial(std::istream& stream);
+	void init(const std::string &directory);
+	void loadState(const Hash &hash);
 	Hash getHash();
 
-	AccountEntry getAccount(EccPublicKey address);
-	void setAccount(EccPublicKey address, AccountEntry account);
+	Account getAccount(EccPublicKey address);
+	void setAccount(EccPublicKey address, Account account);
 
-	std::vector<std::pair<EccPublicKey, AccountEntry>> getAllAccounts();
+	std::vector<std::pair<EccPublicKey, Account>> getAllAccounts();
 
 private:
-	std::vector<std::pair<EccPublicKey, AccountEntry>> entries;
-	std::unordered_map<EccPublicKey, int> indexMap;
+	BinaryTree<EccPublicKey, Account> stateTree;
 };

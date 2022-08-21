@@ -75,7 +75,6 @@ void Validator::run() {
 
 
 		node.creator.reset();
-		node.creator.getBlockChainState(node.chain.state, node.chain.getLatestBlock());
 
 		while (unconfirmedTransactionPool.size() > 0) {
 			auto& tx = unconfirmedTransactionPool.front();

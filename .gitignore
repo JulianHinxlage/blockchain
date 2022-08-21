@@ -1,4 +1,5 @@
 build*/
 .vs/
 local/
+solution/
 *.bak

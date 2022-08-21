@@ -11,6 +11,7 @@ int main(int argc, char* args[]) {
     ChainNetwork network;
     network.db = &node.db;
     network.chain = &node.chain;
+    node.chain.config.initDevnet();
     Wallet wallet;
 
     if (!wallet.init(wallet.selectFile("../wallets"))) {
@@ -23,9 +24,9 @@ int main(int argc, char* args[]) {
     }
 
     node.init(directory, true);
-    if (!node.validateChain(true, 2)) {
-        node.db.save();
-    }
+    //if (!node.validateChain(true, 2)) {
+    //    node.db.save();
+    //}
 
     network.network.logCallback = [&](const std::string& msg, int level) {
         if (level > 0) {
@@ -69,15 +70,18 @@ int main(int argc, char* args[]) {
     {
         std::string str;
         toHex(node.chain.getLatestBlock(), str);
-        printf("chain head block %i hash %s\n", node.chain.getBlockCount() - 1, str.c_str());
+        printf("chain head: block %i hash %s\n", node.chain.getBlockCount() - 1, str.c_str());
     }
     network.syncChain();
     {
         std::string str;
         toHex(node.chain.getLatestBlock(), str);
-        printf("chain head block %i hash %s\n", node.chain.getBlockCount() - 1, str.c_str());
+        printf("chain head: block %i hash %s\n", node.chain.getBlockCount() - 1, str.c_str());
     }
     printf("\n");
+
+
+    Account account = node.chain.state.getAccount(wallet.publicKey);
 
 
     while (true) {
@@ -92,7 +96,7 @@ int main(int argc, char* args[]) {
                 }
                 else if (parts[0] == "info") {
 
-                    AccountEntry account = node.chain.state.getAccount(wallet.publicKey);
+                    Account account = node.chain.state.getAccount(wallet.publicKey);
                     std::string str;
                     toHex(wallet.publicKey, str);
                     printf("address:      %s\n", str.c_str());
@@ -123,11 +127,14 @@ int main(int argc, char* args[]) {
                         }
 
                         Transaction transaction;
-                        TransactionError error = node.creator.createTransaction(transaction, wallet.publicKey, to, amount, fee, wallet.privateKey);
+                        TransactionError error = node.creator.createTransaction(transaction, wallet.publicKey, to, amount, fee, wallet.privateKey, &account);
                         if (error != TransactionError::NONE) {
                             printf("transaction failed with code %i\n", error);
                         }
                         else {
+                            account.nonce++;
+                            account.balance -= transaction.header.amount + transaction.header.fee;
+
                             network.broadcastTransaction(transaction);
                             node.db.addTransaction(transaction);
                         }
@@ -136,9 +143,81 @@ int main(int argc, char* args[]) {
                         printf("usage: send <address> <amount> [fee]\n");
                     }
                 }
+                else if (parts[0] == "multisend") {
+                    if (parts.size() > 3) {
+
+                        int count = 0;
+                        try {
+                            count = std::stoi(parts[1]);
+                        }
+                        catch (...) {
+                            printf("invalid count\n");
+                        }
+
+                        EccPublicKey to;
+                        fromHex(parts[2], to);
+                        Amount amount = 0;
+                        try {
+                            amount = std::stoi(parts[3]);
+                        }
+                        catch (...) {
+                            printf("invalid amount\n");
+                        }
+
+                        Amount fee = 0;
+                        if (parts.size() > 4) {
+                            try {
+                                fee = std::stoi(parts[4]);
+                            }
+                            catch (...) {
+                                printf("invalid fee\n");
+                            }
+                        }
+
+                        for (int i = 0; i < count; i++) {
+                            Transaction transaction;
+                            TransactionError error = node.creator.createTransaction(transaction, wallet.publicKey, to, amount, fee, wallet.privateKey, &account);
+                            if (error != TransactionError::NONE) {
+                                printf("transaction failed with code %i\n", error);
+                            }
+                            else {
+                                account.nonce++;
+                                account.balance -= transaction.header.amount + transaction.header.fee;
+
+                                network.broadcastTransaction(transaction);
+                                node.db.addTransaction(transaction);
+                            }
+                        }
+
+                    }
+                    else {
+                        printf("usage: multisend <count> <address> <amount> [fee]\n");
+                    }
+                }
                 else if (parts[0] == "load") {
                     if (!wallet.init(wallet.selectFile("../wallets"))) {
                         wallet.createKey();
+                    }
+                }
+                else if (parts[0] == "sync") {
+                    printf("\n");
+                    {
+                        std::string str;
+                        toHex(node.chain.getLatestBlock(), str);
+                        printf("chain head: block %i hash %s\n", node.chain.getBlockCount() - 1, str.c_str());
+                    }
+                    network.syncChain();
+                    {
+                        std::string str;
+                        toHex(node.chain.getLatestBlock(), str);
+                        printf("chain head: block %i hash %s\n", node.chain.getBlockCount() - 1, str.c_str());
+                    }
+                    printf("\n");
+                    account = node.chain.state.getAccount(wallet.publicKey);
+                }
+                else if (parts[0] == "validate") {
+                    if (!node.validateChain(true, 2)) {
+                        node.db.save();
                     }
                 }
                 else if (parts[0] == "cutchain") {
@@ -183,6 +262,12 @@ int main(int argc, char* args[]) {
                         toHex(block.getHash(), str);
                         printf("  hash:     %s\n", str.c_str());
                         printf("  time:     %i\n", (int)block.header.timestamp);
+
+                        toHex(block.header.transactionRoot, str);
+                        printf("  tx root:  %s\n", str.c_str());
+                        toHex(block.header.stateRoot, str);
+                        printf("  state:    %s\n", str.c_str());
+
                         printf("  tx count: %i\n", (int)block.transactionTree.transactionHashes.size());
                     }
                 }
@@ -215,7 +300,7 @@ int main(int argc, char* args[]) {
                     }
                 }
                 else if (parts[0] == "help") {
-                    printf("commands: info, send, load, accounts, blocks, transactions\n");
+                    printf("commands: info, send, load, sync, accounts, blocks, transactions\n");
                 }
                 else {
                     printf("unknown command\n");

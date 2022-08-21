@@ -14,8 +14,16 @@ void BlockCreateor::reset() {
 	block = Block();
 }
 
-TransactionError BlockCreateor::createTransaction(Transaction& transaction, const EccPublicKey& from, const EccPublicKey& to, Amount amount, Amount fee, const EccPrivateKey& key) {
-	AccountEntry account = chain->state.getAccount(from);
+TransactionError BlockCreateor::createTransaction(Transaction& transaction, const EccPublicKey& from, const EccPublicKey& to,
+	Amount amount, Amount fee, const EccPrivateKey& key, const Account* accountOverride) {
+	Account account;
+	if (accountOverride) {
+		account = *accountOverride;
+	}
+	else {
+		account = chain->state.getAccount(from);
+	}
+
 	if (account.balance < amount + fee) {
 		return TransactionError::INVALID_BALANCE;
 	}
@@ -23,7 +31,7 @@ TransactionError BlockCreateor::createTransaction(Transaction& transaction, cons
 		return TransactionError::INVALID_KEY;
 	}
 
-	transaction.header.version = chain->config.version;
+	transaction.header.version = chain->config.getVersion();
 	transaction.header.timestamp = time(nullptr);
 	transaction.header.from = from;
 	transaction.header.to = to;
@@ -41,7 +49,7 @@ TransactionError BlockCreateor::addTransaction(const Transaction& transaction) {
 		return TransactionError::INVALID_HASH;
 	}
 	
-	if (transaction.header.version != chain->config.version) {
+	if (transaction.header.version != chain->config.getVersion()) {
 		return TransactionError::INVALID_VERSION;
 	}
 
@@ -59,8 +67,8 @@ TransactionError BlockCreateor::addTransaction(const Transaction& transaction) {
 		return TransactionError::INVALID_FEE;
 	}
 
-	AccountEntry fromAccount = chain->state.getAccount(transaction.header.from);
-	AccountEntry toAccount = chain->state.getAccount(transaction.header.to);
+	Account fromAccount = chain->state.getAccount(transaction.header.from);
+	Account toAccount = chain->state.getAccount(transaction.header.to);
 	if (fromAccount.nonce != transaction.header.nonce) {
 		return TransactionError::INVALID_NONCE;
 	}
@@ -110,14 +118,14 @@ BlockError BlockCreateor::createBlock(const EccPublicKey& beneficiary, const Ecc
 	}
 
 	//add fees to beneficiary
-	AccountEntry beneficiaryAccount = chain->state.getAccount(beneficiary);
+	Account beneficiaryAccount = chain->state.getAccount(beneficiary);
 	beneficiaryAccount.balance += totalFees;
 
 	if (beneficiaryAccount.balance + totalFees < beneficiaryAccount.balance) {
 		return BlockError::INVALID_FEE;
 	}
 
-	block.header.version = chain->config.version;
+	block.header.version = chain->config.getVersion();
 	block.header.timestamp = time(nullptr);
 	block.header.blockNumber = chain->getBlockCount();
 	block.header.previousBlock = chain->getLatestBlock();
@@ -148,16 +156,11 @@ BlockError BlockCreateor::validateBlock(const Block& block) {
 		return BlockError::INVALID_HASH;
 	}
 
-	Hash genesisBlockHash;
-	fromHex("03d81123767aa201dd1a412ff1f425f54fa4d58f9aca908d61b2bc5cc15a3e18", genesisBlockHash);
-	if (block.blockHash == genesisBlockHash) {
-		if (chain->state.getHash() != Hash(0)) {
-			return BlockError::INVALID_STATE;
-		}
+	if (block.blockHash == chain->config.getGenesisBlockHash()) {
 		return BlockError::NONE;
 	}
 
-	if (block.header.version != chain->config.version) {
+	if (block.header.version != chain->config.getVersion()) {
 		return BlockError::INVALID_VERSION;
 	}
 
@@ -181,9 +184,7 @@ BlockError BlockCreateor::validateBlock(const Block& block) {
 	}
 
 	if (chain->state.getHash() != previous.stateRoot) {
-		if (!getBlockChainState(chain->state, block.header.previousBlock)) {
-			return BlockError::INVALID_STATE;
-		}
+		chain->state.loadState(previous.stateRoot);
 		if (chain->state.getHash() != previous.stateRoot) {
 			return BlockError::INVALID_STATE;
 		}
@@ -203,7 +204,7 @@ BlockError BlockCreateor::validateBlock(const Block& block) {
 		addTransaction(transaction);
 	}
 
-	AccountEntry beneficiaryAccount = chain->state.getAccount(block.header.beneficiary);
+	Account beneficiaryAccount = chain->state.getAccount(block.header.beneficiary);
 	beneficiaryAccount.balance += totalFees;
 	if (beneficiaryAccount.balance + totalFees < beneficiaryAccount.balance) {
 		return BlockError::INVALID_FEE;
@@ -217,57 +218,13 @@ BlockError BlockCreateor::validateBlock(const Block& block) {
 	return BlockError::NONE;
 }
 
-bool BlockCreateor::getBlockChainState(BlockChainState& state, const Hash& blockHash) {
-	Block block;
-	chain->config.createGenesis(block, state);
-	chain->config.genesisBlockHash;
-
-	if (chain->db->getBlock(blockHash, block)) {
-		int num = block.header.blockNumber;
-		if (num >= 0 && num < chain->blocks.size() && chain->blocks[num] == blockHash) {
-			
-			for (int i = 1; i <= num; i++) {
-				if (!chain->db->getBlock(chain->blocks[i], block)) {
-					return false;
-				}
-				if (processBlock(block, state, chain->db) != BlockError::NONE) {
-					return false;
-				}
-			}
-		}
-		else {
-			Hash hash = blockHash;
-			std::vector<Hash> blockList;
-
-			while (hash != chain->config.genesisBlockHash) {
-				blockList.push_back(hash);
-				if (!chain->db->getBlock(hash, block)) {
-					return false;
-				}
-				hash = block.header.previousBlock;
-			}
-
-			for (int i = 0; i < blockList.size(); i++) {
-				if (!chain->db->getBlock(blockList[i], block)) {
-					return false;
-				}
-				if (processBlock(block, state, chain->db) != BlockError::NONE) {
-					return false;
-				}
-			}
-		}
-	}
-
-	return true;
-}
-
 void BlockCreateor::processTransaction(const Transaction& transaction, BlockChainState& state) {
-	AccountEntry fromAccount = state.getAccount(transaction.header.from);
+	Account fromAccount = state.getAccount(transaction.header.from);
 	fromAccount.balance -= transaction.header.amount + transaction.header.fee;
 	fromAccount.nonce++;
 	chain->state.setAccount(transaction.header.from, fromAccount);
 	
-	AccountEntry toAccount = state.getAccount(transaction.header.to);
+	Account toAccount = state.getAccount(transaction.header.to);
 	toAccount = chain->state.getAccount(transaction.header.to);
 	toAccount.balance += transaction.header.amount;
 	chain->state.setAccount(transaction.header.to, toAccount);
@@ -286,7 +243,7 @@ BlockError BlockCreateor::processBlock(const Block& block, BlockChainState& stat
 		processTransaction(transaction, state);
 	}
 
-	AccountEntry beneficiaryAccount = state.getAccount(block.header.beneficiary);
+	Account beneficiaryAccount = state.getAccount(block.header.beneficiary);
 	beneficiaryAccount.balance += totalFees;
 	chain->state.setAccount(block.header.beneficiary, beneficiaryAccount);
 

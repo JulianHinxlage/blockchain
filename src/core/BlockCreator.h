@@ -8,18 +8,14 @@ public:
 	Block block;
 	Amount totalFees;
 	BlockChain* chain;
-	BlockChainState state;
 
 	BlockCreateor();
 	void reset();
-	TransactionError createTransaction(Transaction& transaction, const EccPublicKey& from, const EccPublicKey& to, Amount amount, Amount fee, const EccPrivateKey& key);
+	TransactionError createTransaction(Transaction& transaction, const EccPublicKey& from,
+		const EccPublicKey& to, Amount amount, Amount fee, const EccPrivateKey& key, const Account*accountOverride = nullptr);
 	TransactionError addTransaction(const Transaction &transaction);
 	BlockError createBlock(const EccPublicKey& beneficiary, const EccPublicKey& validator, const EccPrivateKey& key, Block *blockOutput = nullptr);
 	BlockError validateBlock(const Block &block);
-
-	//generates the blockchain state after the given block
-	//root of the state will be same as the root hash in the block
-	bool getBlockChainState(BlockChainState& state, const Hash &blockHash);
 
 private:
 	void processTransaction(const Transaction& transaction, BlockChainState& state);

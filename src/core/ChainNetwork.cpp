@@ -165,8 +165,9 @@ void ChainNetwork::onMessage(const std::string& msg, PeerId source) {
 			Packet response;
 			response.add(Opcode::REQUEST_BLOCKS);
 			response.add(newCount);
-			response.add(hashes[hashes.size() - 1]);
-
+			if (hashes.size() > 0) {
+				response.add(hashes[hashes.size() - 1]);
+			}
 			network.send(response.remaining(), source);
 		}
 

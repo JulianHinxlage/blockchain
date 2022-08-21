@@ -31,7 +31,7 @@ bool Wallet::init(const std::string& file) {
 				valid = true;
 			}
 		}
-
+		
 		if (!valid) {
 			privateKey = 0;
 			publicKey = 0;
