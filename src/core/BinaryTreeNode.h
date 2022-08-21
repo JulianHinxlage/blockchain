@@ -1,6 +1,7 @@
 #pragma once
 
 #include "util/Buffer.h"
+#include "CachedKeyValueStore.h"
 #include "cryptography/sha.h"
 #include <stdint.h>
 #include <memory>
@@ -78,43 +79,59 @@ public:
 		};
 	};
 	std::shared_ptr<Node> nodes[2];
+	CachedKeyValueStore* store;
 
-	BinaryTreeNode() {
+	BinaryTreeNode(CachedKeyValueStore *store) {
 		type = Type::UNDEFINED;
 		pathLength = 0;
 		path.data = 0;
 		child = 0;
+		childs[0] = 0;
+		childs[1] = 0;
+		this->store = store;
 	}
 
 	Node *lookupChild(const Key &key, int &bitOffset) {
 		switch (type) {
-		case Type::BRANCH:
-			if (key.getBit(bitOffset)) {
-				if (nodes[1]) {
-					bitOffset++;
-					return nodes[1].get();
-				}
-				else {
-					return nullptr;
-				}
+		case Type::BRANCH: {
+			int bit = key.getBit(bitOffset);
+			if (nodes[bit]) {
+				bitOffset++;
+				return nodes[bit].get();
 			}
 			else {
-				if (nodes[0]) {
+				if (store && childs[bit] != Hash(0)) {
+					nodes[bit] = std::make_shared<Node>(store);
+					nodes[bit]->load(childs[bit]);
 					bitOffset++;
-					return nodes[0].get();
+					return nodes[bit].get();
 				}
 				else {
 					return nullptr;
 				}
 			}
 			break;
+		}
 		case Type::EXTENSION: {
 			int match = path.matchingBitCount(key, bitOffset);
 			match = std::min(match, (int)pathLength);
-			if (match == pathLength && nodes[0]) {
-				bitOffset += match;
-				return nodes[0].get();
-			}
+			if (match == pathLength) {
+				if (nodes[0]) {
+					bitOffset += match;
+					return nodes[0].get();
+				}
+				else {
+					if (store && child != Hash(0)) {
+						nodes[0] = std::make_shared<Node>(store);
+						nodes[0]->load(child);
+						bitOffset += match;
+						return nodes[0].get();
+					}
+					else {
+						return nullptr;
+					}
+				}
+			} 
 			else {
 				return nullptr;
 			}
@@ -152,7 +169,7 @@ public:
 	}
 
 	std::shared_ptr<Node> createNewLeaf(const Key& key, int bitOffset) {
-		std::shared_ptr<Node> newLeaf = std::make_shared<Node>();
+		std::shared_ptr<Node> newLeaf = std::make_shared<Node>(store);
 		newLeaf->type = Type::LEAF;
 		newLeaf->pathLength = sizeof(Key) * 8 - bitOffset;
 		for (int i = 0; i < newLeaf->pathLength; i++) {
@@ -162,7 +179,7 @@ public:
 	}
 
 	std::shared_ptr<Node> createNewExtension(const Key& key, int bitOffset, int length) {
-		std::shared_ptr<Node> newExtension = std::make_shared<Node>();
+		std::shared_ptr<Node> newExtension = std::make_shared<Node>(store);
 		newExtension->type = Type::EXTENSION;
 		newExtension->pathLength = length;
 		for (int i = 0; i < newExtension->pathLength; i++) {
@@ -176,7 +193,8 @@ public:
 		if (next) {
 			if (next == this) {
 				//the requested key alrady exists, so copy the node for new root
-				std::shared_ptr<Node> newLeaf = createNewLeaf(key, bitOffset);
+				std::shared_ptr<Node> newLeaf = std::make_shared<Node>(store);
+				*newLeaf = *this;
 				newRoot = newLeaf;
 				return newLeaf.get();
 			}
@@ -185,7 +203,7 @@ public:
 				if(leaf){
 					if (newRoot.get() != next && type != Type::LEAF) {
 						//create a new root to create a new tree branch all the way up
-						std::shared_ptr<Node> newNode = std::make_shared<Node>();
+						std::shared_ptr<Node> newNode = std::make_shared<Node>(store);
 						*newNode = *this;
 						if (type == Type::BRANCH) {
 							for (int i = 0; i < 2; i++) {
@@ -216,7 +234,7 @@ public:
 			case Type::EXTENSION:
 			case Type::LEAF: {
 				int match = path.matchingBitCount(key, bitOffset);
-				std::shared_ptr<Node> newBranch = std::make_shared<Node>();
+				std::shared_ptr<Node> newBranch = std::make_shared<Node>(store);
 				newBranch->type = Type::BRANCH;
 
 				std::shared_ptr<Node> newLeaf = createNewLeaf(key, bitOffset + match + 1);
@@ -235,7 +253,7 @@ public:
 					oldLeaf = nodes[0];
 				}
 				else {
-					oldLeaf = std::make_shared<Node>();
+					oldLeaf = std::make_shared<Node>(store);
 					*oldLeaf = *this;
 					oldLeaf->path.data = oldLeaf->path.data >> (match + 1);
 					oldLeaf->pathLength -= match + 1;
@@ -277,7 +295,7 @@ public:
 
 			if (next->erase(key, bitOffset, newRoot)) {
 				if (newRoot != nullptr) {
-					std::shared_ptr<Node> newNode = std::make_shared<Node>();
+					std::shared_ptr<Node> newNode = std::make_shared<Node>(store);
 					*newNode = *this;
 					if (type == Type::BRANCH) {
 						for (int i = 0; i < 2; i++) {
@@ -309,7 +327,7 @@ public:
 				else {
 					//child node was erased
 					if (type == Type::BRANCH) {
-						std::shared_ptr<Node> newNode = std::make_shared<Node>();
+						std::shared_ptr<Node> newNode = std::make_shared<Node>(store);
 
 						for (int i = 0; i < 2; i++) {
 							if (nodes[i].get() == next) {
@@ -319,7 +337,7 @@ public:
 
 						if (newNode->type == Type::BRANCH) {
 							//replace branch node with extension node
-							std::shared_ptr<Node> newExtension = std::make_shared<Node>();
+							std::shared_ptr<Node> newExtension = std::make_shared<Node>(store);
 							newExtension->type = Type::EXTENSION;
 							newExtension->pathLength = 1;
 							newExtension->path.setBit(0, !key.getBit(startBitOffset));
@@ -437,15 +455,39 @@ public:
 		switch (type) {
 		case Type::BRANCH:
 			if (childs[0] == Hash(0) || recalculate) {
-				childs[0] = nodes[0]->calculateHash(recalculate);
+				if (!nodes[0]) {
+					nodes[0] = std::make_shared<Node>(store);
+					nodes[0]->load(childs[0]);
+					childs[0] = nodes[0]->calculateHash(recalculate);
+				}
+				else {
+					childs[0] = nodes[0]->calculateHash(recalculate);
+					nodes[0]->save();
+				}
 			}
 			if (childs[1] == Hash(0) || recalculate) {
-				childs[1] = nodes[1]->calculateHash(recalculate);
+				if (!nodes[1]) {
+					nodes[1] = std::make_shared<Node>(store);
+					nodes[1]->load(childs[1]);
+					childs[1] = nodes[1]->calculateHash(recalculate);
+				}
+				else {
+					childs[1] = nodes[1]->calculateHash(recalculate);
+					nodes[1]->save();
+				}
 			}
 			break;
 		case Type::EXTENSION:
 			if (child == Hash(0) || recalculate) {
-				child = nodes[0]->calculateHash(recalculate);
+				if (!nodes[0]) {
+					nodes[0] = std::make_shared<Node>(store);
+					nodes[0]->load(child);
+					child = nodes[0]->calculateHash(recalculate);
+				}
+				else {
+					child = nodes[0]->calculateHash(recalculate);
+					nodes[0]->save();
+				}
 			}
 			break;
 		default:
@@ -485,4 +527,23 @@ public:
 
 		bitOffset -= pathLength;
 	}
+
+	void save() {
+		if (store) {
+			Buffer buffer;
+			serial(buffer);
+			store->set(calculateHash(), buffer);
+		}
+	}
+
+	void load(Hash hash) {
+		if (store) {
+			auto value = store->get(hash);
+			if (value.size > 0) {
+				Buffer buffer = value.toBuffer();
+				deserial(buffer);
+			}
+		}
+	}
+
 };

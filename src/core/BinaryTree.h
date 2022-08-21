@@ -2,6 +2,7 @@
 
 #include "type.h"
 #include "BinaryTreeNode.h"
+#include "CachedKeyValueStore.h"
 #include <unordered_map>
 
 template<typename KeyType, typename ValueType, typename HashType = Hash>
@@ -17,6 +18,11 @@ public:
 		historyIndexOffset = 0;
 	}
 
+	void initStore(const std::string& directory, int version = 1, uint64_t maxFileSize = uint64_t(4) * 1024 * 1024 * 1024 - 1) {
+		store = std::make_shared<CachedKeyValueStore>();
+		store->init(directory, version, maxFileSize);
+	}
+
 	HashType root() {
 		return rootHash;
 	}
@@ -24,6 +30,7 @@ public:
 	HashType recalculateRootHash() {
 		ensureRoot();
 		rootHash = rootNode->calculateHash(true);
+		rootNode->save();
 		return rootHash;
 	}
 
@@ -36,6 +43,7 @@ public:
 			leaf->value = value;
 			rootNode = newRoot;
 			rootHash = rootNode->calculateHash();
+			rootNode->save();
 			if (saveHistoryEnabled) {
 				historyRoots.push_back(rootNode);
 				historyRootHashes.push_back(rootHash);
@@ -67,7 +75,7 @@ public:
 		std::shared_ptr<Node> newRoot;
 		if(rootNode->erase(Key(key), bitOffset, newRoot)) {
 			if (newRoot == nullptr) {
-				newRoot = std::make_shared<Node>();
+				newRoot = std::make_shared<Node>(store.get());
 			}
 			rootNode = newRoot;
 			rootHash = rootNode->calculateHash();
@@ -205,17 +213,50 @@ public:
 		auto x = historyIndexMap.find(targetRoot);
 		if (x == historyIndexMap.end()) {
 			//given root not in history
-			return false;
+
+			if(targetRoot == Hash(0)) {
+				tree.historyIndexOffset = 0;
+				tree.historyRoots.clear();
+				tree.historyRootHashes.clear();
+				tree.historyIndexMap.clear();
+				tree.store = store;
+				tree.ensureRoot();
+				return true;
+			}
+
+			if (store) {
+				Buffer buffer = store->get(targetRoot).toBuffer();
+				if (buffer.size() > 0) {
+					tree.historyIndexOffset = 0;
+					tree.historyRoots.clear();
+					tree.historyRootHashes.clear();
+					tree.historyIndexMap.clear();
+					tree.store = store;
+
+					tree.rootNode = std::make_shared<Node>(store.get());
+					tree.rootNode->deserial(buffer);
+					tree.rootHash = tree.rootNode->calculateHash();
+					return true;
+				}
+				else {
+					return false;
+				}
+			}
+			else {
+				return false;
+			}
 		}
 		int index = x->second;
+
+		tree.rootNode = historyRoots[index - historyIndexOffset];
+		tree.rootHash = historyRootHashes[index - historyIndexOffset];
 
 		tree.historyIndexOffset = 0;
 		tree.historyRoots.clear();
 		tree.historyRootHashes.clear();
 		tree.historyIndexMap.clear();
+		tree.store = store;
 
-		tree.rootNode = historyRoots[index - historyIndexOffset];
-		tree.rootHash = historyRootHashes[index - historyIndexOffset];
 		return true;
 	}
 
@@ -241,12 +282,13 @@ private:
 	std::vector<std::shared_ptr<Node>> historyRoots;
 	std::vector<HashType> historyRootHashes;
 	std::unordered_map<HashType, int> historyIndexMap;
+	std::shared_ptr<CachedKeyValueStore> store;
 	int historyIndexOffset;
 	bool saveHistoryEnabled;
 
 	void ensureRoot() {
 		if (rootNode == nullptr) {
-			rootNode = std::make_shared<Node>();
+			rootNode = std::make_shared<Node>(store.get());
 			rootHash = rootNode->calculateHash();
 			if (saveHistoryEnabled) {
 				historyRoots.push_back(rootNode);
