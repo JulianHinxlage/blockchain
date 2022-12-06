@@ -500,7 +500,7 @@ public:
 		return sha256(buffer.data(), buffer.size());
 	}
 
-	void each(Key &key, int &bitOffset, std::function<void(const KeyType&, const ValueType&)> callback) {
+	void each(Key &key, int &bitOffset, std::function<void(const KeyType&, const ValueType&)> callback, bool loadAll = false) {
 		for (int i = 0; i < pathLength; i++) {
 			key.setBit(i + bitOffset, path.getBit(i));
 		}
@@ -510,13 +510,40 @@ public:
 		case Type::BRANCH:
 			bitOffset++;
 			key.setBit(bitOffset - 1, 0);
-			nodes[0]->each(key, bitOffset, callback);
+			if (nodes[0]) {
+				nodes[0]->each(key, bitOffset, callback, loadAll);
+			}
+			else if(loadAll) {
+				if (store && childs[0] != Hash(0)) {
+					nodes[0] = std::make_shared<Node>(store);
+					nodes[0]->load(childs[0]);
+					nodes[0]->each(key, bitOffset, callback, loadAll);
+				}
+			}
 			key.setBit(bitOffset - 1, 1);
-			nodes[1]->each(key, bitOffset, callback);
+			if (nodes[1]) {
+				nodes[1]->each(key, bitOffset, callback, loadAll);
+			}
+			else if (loadAll) {
+				if (store && childs[1] != Hash(0)) {
+					nodes[1] = std::make_shared<Node>(store);
+					nodes[1]->load(childs[1]);
+					nodes[1]->each(key, bitOffset, callback, loadAll);
+				}
+			}
 			bitOffset--;
 			break;
 		case Type::EXTENSION:
-			nodes[0]->each(key, bitOffset, callback);
+			if (nodes[0]) {
+				nodes[0]->each(key, bitOffset, callback, loadAll);
+			}
+			else if (loadAll) {
+				if (store && child != Hash(0)) {
+					nodes[0] = std::make_shared<Node>(store);
+					nodes[0]->load(child);
+					nodes[0]->each(key, bitOffset, callback, loadAll);
+				}
+			}
 			break;
 		case Type::LEAF:
 			callback(key.data, value);

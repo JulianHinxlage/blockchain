@@ -260,11 +260,11 @@ public:
 		return true;
 	}
 
-	void each(std::function<void(const KeyType&, const ValueType&)> callback) {
+	void each(std::function<void(const KeyType&, const ValueType&)> callback, bool loadAll = false) {
 		ensureRoot();
 		Key key;
 		int bitIndex = 0;
-		rootNode->each(key, bitIndex, callback);
+		rootNode->each(key, bitIndex, callback, loadAll);
 	}
 
 	void clear() {

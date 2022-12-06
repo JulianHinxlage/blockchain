@@ -9,6 +9,7 @@ class Account {
 public:
 	Amount balance;
 	uint32_t nonce;
+	uint32_t unused;
 	Hash code;
 	Hash storage;
 

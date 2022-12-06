@@ -21,6 +21,7 @@ public:
 		auto x = cache.find(key.toString());
 		if (x == cache.end()) {
 			buffer = store.get(key).toBuffer();
+			cache[key.toString()] = buffer;
 			return buffer;
 		}
 		else {

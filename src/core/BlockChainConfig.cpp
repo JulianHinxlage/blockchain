@@ -19,6 +19,7 @@ void BlockChainConfig::initDevnet() {
 	genesisBlock.header.transactionRoot = genesisBlock.transactionTree.getHash();
 	genesisBlock.header.beneficiary = 0;
 	genesisBlock.header.validator = 0;
+	genesisBlock.header.signature = 0;
 	
 	genesisBlock.header.stateRoot = genesisState.getHash();
 	

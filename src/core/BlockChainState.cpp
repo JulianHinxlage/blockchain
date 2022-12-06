@@ -25,12 +25,17 @@ void BlockChainState::setAccount(EccPublicKey address, Account account) {
 }
 
 std::vector<std::pair<EccPublicKey, Account>> BlockChainState::getAllAccounts() {
-	return {};
+	std::vector<std::pair<EccPublicKey, Account>> accounts;
+	stateTree.each([&](const EccPublicKey& address, const Account& acc) {
+		accounts.push_back({ address, acc });
+	}, true);
+	return accounts;
 }
 
 Account::Account() {
 	balance = 0;
 	nonce = 0;
+	unused = 0;
 	code = 0;
 	storage = 0;
 }
@@ -48,5 +53,6 @@ bool Account::deserial(std::istream& stream) {
 	stream.read((char*)&nonce, sizeof(nonce));
 	stream.read((char*)&code, sizeof(code));
 	stream.read((char*)&storage, sizeof(storage));
+	unused = 0;
 	return true;
 }
