@@ -5,14 +5,13 @@ project(Core)
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/core/*.cpp src/cryptography/*.cpp src/network/*.cpp src/util/*.cpp)
 add_library(${PROJECT_NAME} STATIC ${SOURCES})
 include_directories(${PROJECT_NAME} PUBLIC src)
+if(WIN32)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ws2_32)
+endif()
 
 find_package(OpenSSL REQUIRED)
 target_include_directories(${PROJECT_NAME} PUBLIC ${OPENSSL_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIRS})
 target_link_libraries(${PROJECT_NAME} PUBLIC ${OPENSSL_LIBRARIES})
-
-find_package(Boost REQUIRED)
-target_include_directories(${PROJECT_NAME} PUBLIC ${Boost_INCLUDE_DIRS})
-target_link_libraries(${PROJECT_NAME} PUBLIC ${Boost_LIBRARIES})
 
 project(Wallet)
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/wallet/*.cpp)

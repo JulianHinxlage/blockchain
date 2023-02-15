@@ -29,7 +29,7 @@ class Peer {
 public:
 	PeerId id;
 	Endpoint ep;
-    std::shared_ptr<Connection> connection;
+    std::shared_ptr<net::Connection> connection;
 };
 
 class PeerRoutingTable {

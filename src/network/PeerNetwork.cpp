@@ -1,6 +1,7 @@
 #include "PeerNetwork.h"
 #include "util/hex.h"
 #include "util/random.h"
+#include <sstream>
 
 /*
 -- Legend -- 
@@ -12,8 +13,8 @@ NOOP  <- Opcode (32 bits)
 NOOP
 HANDSHAKE		id(128) port(16) ip(str)
 HANDSHAKE_REPLY id(128) port(16) ip(str) answerIp(str)
-LOCKUP			relay(128) target(128)
-LOCKUP_REPLY	source(128) target(128) port(16) ip(str)
+LOOKUP			relay(128) target(128)
+LOOKUP_REPLY	source(128) target(128) port(16) ip(str)
 ROUTE			source(128) destination(128) exact(8) <packet>
 MESSAGE			msg(str)
 BORADCAST		source(128) nonce(128) msg(str)
@@ -64,7 +65,15 @@ bool PeerNetwork::start(uint16_t port, const std::string ip, uint16_t maxPortOff
 
 	bool portFound = false;
 	for (int i = 0; i < maxPortOffset + 1; i++) {
-		if (!listener.listen(port)) {
+		if (!listener.runListen(port, ip, [&](std::shared_ptr<net::Connection> con) {
+			auto peer = std::make_shared<Peer>();
+			peer->connection = con;
+			auto ep = con->socket->getEndpoint();
+			peer->ep.port = ep.getPort();
+			peer->ep.ip = ep.getAddress();
+			routingTable.add(peer);
+			processConnection(peer.get());
+		})) {
 			port++;
 			routingTable.localPeer->ep.port = port;
 		}
@@ -77,18 +86,6 @@ bool PeerNetwork::start(uint16_t port, const std::string ip, uint16_t maxPortOff
 	if (!portFound) {
 		return false;
 	}
-
-	listenerThread = std::make_shared<std::thread>([&]() {
-		listener.accept([&](std::shared_ptr<Connection> con) {
-			auto peer = std::make_shared<Peer>();
-			peer->connection = con;
-			auto ep = con->socket.remote_endpoint();
-			peer->ep.port = ep.port();
-			peer->ep.ip = ep.address().to_string();
-			routingTable.add(peer);
-			processConnection(peer.get());
-		});
-	});
 
 	return true;
 }
@@ -103,31 +100,37 @@ void PeerNetwork::stop() {
 
 Peer *PeerNetwork::connectToPeer(const Endpoint& ep, PeerId id, bool waitForHandshake) {
 	auto peer = std::make_shared<Peer>();
-	peer->connection = std::make_shared<Connection>();
+	peer->connection = std::make_shared<net::Connection>();
 	peer->id = id;
-	if (peer->connection->connect(ep.ip, ep.port)) {
+
+	peer->connection->onConnect = [&, peer](net::Connection* conn) {
 		peer->ep = ep;
 		routingTable.add(peer);
+
+		if (logCallback) {
+			std::stringstream stream;
+			stream << "connection " << peer->ep.ip << ":" << peer->ep.port;
+			logCallback(stream.str(), 2);
+		}
 
 		Packet packet;
 		packet.add(Opcode::HANDSHAKE);
 		packet.add(routingTable.localPeer->id);
 		packet.add(routingTable.localPeer->ep.port);
 		packet.addStr(routingTable.localPeer->ep.ip);
-		peer->connection->write(packet.remaining());
-		
-		if (waitForHandshake) {
-			processNextPacket(peer.get());
-		}
+		peer->connection->write(packet);
+	};
 
-		peer->connection->thread = std::make_shared<std::thread>([&, peer]() {
-			processConnection(peer.get());
-		});
-		return peer.get();
-	}
-	else {
-		return nullptr;
-	}
+	peer->connection->onDisconnect = [&, peer](net::Connection* conn) {
+		onDisconnectPeer(peer.get());
+	};
+
+	peer->connection->runConnect(ep.ip, ep.port, [&, peer](net::Connection* conn, void* data, int bytes) {
+		std::string msg((char*)data, bytes);
+		processPacket(msg, peer.get(), peer->id, true);
+	});
+
+	return peer.get();
 }
 
 void PeerNetwork::lookupPeer(PeerId target, Peer *relay) {
@@ -147,7 +150,7 @@ void PeerNetwork::lookupPeer(PeerId target, Peer *relay) {
 
 	requestedLookups.insert(target);
 	if (relay) {
-		relay->connection->write(packet.remaining());
+		relay->connection->write(packet);
 	}
 	else {
 		sendPacket(packet, target);
@@ -163,10 +166,16 @@ bool PeerNetwork::connect() {
 				logCallback(stream.str(), 1);
 			}
 			Peer* peer = connectToPeer(entry, PeerId(0), true);
-			if (peer) {
-				for (int i = 0; i < joinLockupCount; i++) {
-					PeerId target = routingTable.lookupTarget(i);
-					lookupPeer(target, peer);
+
+			if (peer->connection->socket->isConnected()) {
+				while (peer->id == PeerId(0)) {
+					//wait for handshake to complete
+				}
+				if (peer) {
+					for (int i = 0; i < joinLockupCount; i++) {
+						PeerId target = routingTable.lookupTarget(i);
+						lookupPeer(target, peer);
+					}
 				}
 			}
 			if (isConnected()) {
@@ -184,8 +193,8 @@ void PeerNetwork::disconnect() {
 
 	for (auto& peer : routingTable.peers) {
 		if (peer && peer->connection) {
-			if (peer->connection->connected) {
-				peer->connection->write(packet.remaining());
+			if (peer->connection->socket->isConnected()) {
+				peer->connection->write(packet);
 			}
 		}
 	}
@@ -224,8 +233,8 @@ void PeerNetwork::broadcast(const std::string& msg) {
 	broadcastNonces.insert(nonce);
 	for(auto &peer : routingTable.peers) {
 		if (peer && peer->connection) {
-			if (peer->connection->connected) {
-				peer->connection->write(packet.remaining());
+			if (peer->connection->socket->isConnected()) {
+				peer->connection->write(packet);
 			}
 		}
 	}
@@ -234,8 +243,8 @@ void PeerNetwork::broadcast(const std::string& msg) {
 void PeerNetwork::sendPacket(Packet& packet, PeerId target, PeerId except) {
 	Peer *next = routingTable.getClosest(target, except, false);
 	if (next && next->connection) {
-		if (next->connection->connected) {
-			next->connection->write(packet.remaining());
+		if (next->connection->socket->isConnected()) {
+			next->connection->write(packet);
 		}
 	}
 }
@@ -247,35 +256,14 @@ void PeerNetwork::processConnection(Peer *peer) {
 		logCallback(stream.str(), 2);
 	}
 
-	while (peer->connection->connected) {
-		processNextPacket(peer);
-	}
+	peer->connection->onDisconnect = [&, peer](net::Connection* conn) {
+		onDisconnectPeer(peer);
+	};
 
-	if (logCallback) {
-		std::stringstream stream;
-		stream << "disconnect " << peer->ep.ip << ":" << peer->ep.port;
-		logCallback(stream.str(), 2);
-	}
-
-	PeerId leftId = peer->id;
-	routingTable.remove(leftId);
-	std::this_thread::sleep_for(std::chrono::milliseconds(200));
-	int level = routingTable.getLevel(leftId);
-	PeerId target = routingTable.lookupTarget(level);
-	Peer* next = routingTable.getClosest(target);
-	if (!next || routingTable.getLevel(next->id) != level) {
-		lookupPeer(target);
-	}
-}
-
-void PeerNetwork::processNextPacket(Peer* peer) {
-	if (peer->connection->connected) {
-		std::string msg = peer->connection->read();
-		if (!peer->connection->connected) {
-			return;
-		}
+	peer->connection->run([&, peer](net::Connection* conn, void* data, int bytes) {
+		std::string msg((char*)data, bytes);
 		processPacket(msg, peer, peer->id, true);
-	}
+	});
 }
 
 void PeerNetwork::processPacket(const std::string& msg, Peer* peer, PeerId msgSource, bool wasDirectlySend) {
@@ -308,7 +296,7 @@ void PeerNetwork::processPacket(const std::string& msg, Peer* peer, PeerId msgSo
 			response.add(routingTable.localPeer->id);
 			response.add(routingTable.localPeer->ep.port);
 			response.addStr(routingTable.localPeer->ep.ip);
-			response.addStr(peer->connection->socket.remote_endpoint().address().to_string());
+			response.addStr(peer->connection->socket->getEndpoint().getAddress());
 			sendPacket(response, peer->id);
 		}
 		break;
@@ -394,7 +382,8 @@ void PeerNetwork::processPacket(const std::string& msg, Peer* peer, PeerId msgSo
 			}
 			else {
 				if (next->connection) {
-					next->connection->write(msg);
+					packet.unskip(packet.offset);
+					next->connection->write(packet);
 				}
 			}
 		}
@@ -409,26 +398,31 @@ void PeerNetwork::processPacket(const std::string& msg, Peer* peer, PeerId msgSo
 		PeerId source = packet.get<PeerId>();
 		PeerId nonce = packet.get<PeerId>();
 		
+		mutex.lock();
 		if (broadcastNonces.contains(nonce)) {
+			mutex.unlock();
 			break;
 		}
 		broadcastNonces.insert(nonce);
+		mutex.unlock();
 
+		std::string msg = packet.remaining();
+		packet.unskip(packet.offset);
 		for (auto& i : routingTable.peers) {
 			if (i && i->connection) {
 				if (i.get() != peer) {
-					i->connection->write(msg);
+					i->connection->write(packet);
 				}
 			}
 		}
 		if (msgCallback) {
-			msgCallback(packet.remaining(), source);
+			msgCallback(msg, source);
 		}
 		break;
 	}
 	case Opcode::DISCONNECT:
 		if (wasDirectlySend) {
-			peer->connection->connected = false;
+			peer->connection->socket->disconnect();
 		}
 		break;
 	default:
@@ -444,5 +438,16 @@ PeerId PeerNetwork::getRandomNeighbor() {
 	}
 	else {
 		return PeerId(0);
+	}
+}
+
+void PeerNetwork::onDisconnectPeer(Peer* peer) {
+	int level = routingTable.getLevel(peer->id);
+	lookupPeer(routingTable.lookupTarget(level));
+
+	if (logCallback) {
+		std::stringstream stream;
+		stream << "disconnect " << peer->ep.ip << ":" << peer->ep.port;
+		logCallback(stream.str(), 2);
 	}
 }

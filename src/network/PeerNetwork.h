@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Listener.h"
 #include "PeerRoutingTable.h"
 #include "Packet.h"
 #include <set>
@@ -40,17 +39,18 @@ public:
 
 private:
 	std::vector<Endpoint> entryNodes;
-	Listener listener;
+	net::Connection listener;
 	std::shared_ptr<std::thread> listenerThread;
 	PeerRoutingTable routingTable;
 	std::set<Blob<128>> broadcastNonces;
+	std::mutex mutex;
 	int joinLockupCount;
 	std::set<PeerId> requestedLookups;
 
 	void sendPacket(Packet& packet, PeerId target, PeerId except = PeerId(0));
 	void processConnection(Peer* peer);
-	void processNextPacket(Peer *peer);
 	void processPacket(const std::string &msg, Peer* peer, PeerId msgSource, bool wasDirectlySend);
 	Peer *connectToPeer(const Endpoint &ep, PeerId id, bool waitForHandshake);
 	void lookupPeer(PeerId target, Peer* relay = nullptr);
+	void onDisconnectPeer(Peer* peer);
 };

@@ -2,6 +2,7 @@
 
 #include "network/PeerNetwork.h"
 #include "DataBase.h"
+#include <sstream>
 
 class ChainNetwork {
 public:

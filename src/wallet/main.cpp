@@ -174,6 +174,16 @@ int main(int argc, char* args[]) {
                             }
                         }
 
+                        int delay = 0;
+                        if (parts.size() > 5) {
+                            try {
+                                delay = std::stoi(parts[5]);
+                            }
+                            catch (...) {
+                                printf("invalid delay\n");
+                            }
+                        }
+
                         for (int i = 0; i < count; i++) {
                             Transaction transaction;
                             TransactionError error = node.creator.createTransaction(transaction, wallet.publicKey, to, amount, fee, wallet.privateKey, &account);
@@ -187,6 +197,8 @@ int main(int argc, char* args[]) {
                                 network.broadcastTransaction(transaction);
                                 node.db.addTransaction(transaction);
                             }
+
+                            std::this_thread::sleep_for(std::chrono::milliseconds(delay));
                         }
 
                     }

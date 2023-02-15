@@ -27,7 +27,7 @@ public:
         get((char*)&t, sizeof(t));
         return t;
     }
-
+    
     template<typename T>
     void add(const T &t){
         add((char*)&t, sizeof(t));
