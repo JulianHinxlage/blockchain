@@ -1,0 +1,6 @@
+build*/
+deploy*/
+.vs/
+.vscode/
+local/
+*.bak
