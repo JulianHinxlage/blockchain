@@ -39,7 +39,7 @@ static std::string toHex(const T& t) {
 
 template<typename T>
 static T fromHex(const std::string& str) {
-	Hash t;
+	T t;
 	for (int i = 0; i < str.size(); i += 2) {
 		uint8_t v = 0;
 		v |= hexCharToInt(str[i]) << 4;

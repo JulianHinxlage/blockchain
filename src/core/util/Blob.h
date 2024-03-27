@@ -19,6 +19,11 @@ public:
     }
 
     template<typename T>
+    Blob(const T& t) {
+        operator=(t);
+    }
+
+    template<typename T>
     Blob& operator=(const T& t) {
         int size = sizeof(*this) < sizeof(t) ? sizeof(*this) : sizeof(t);
         for (int i = 0; i < size; i++) {
@@ -41,11 +46,6 @@ public:
             ((uint8_t*)&t)[i] = 0;
         }
         return t;
-    }
-
-    template<typename T>
-    explicit Blob(const T& t) {
-        operator=(t);
     }
 
     bool operator==(const Blob& blob) const {

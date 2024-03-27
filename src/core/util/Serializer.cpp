@@ -63,12 +63,13 @@ void Serializer::writeBytes(const uint8_t* data, int size) {
 }
 
 void Serializer::readBytes(uint8_t* data, int size) {
-	int count = size;
-	if (dataSize - readIndex < size) {
-		count = dataSize - readIndex;
-	}
-	for (int i = 0; i < count; i++) {
-		data[i] = dataPtr[readIndex++];
+	for (int i = 0; i < size; i++) {
+		if (readIndex < dataSize) {
+			data[i] = dataPtr[readIndex++];
+		}
+		else {
+			data[i] = 0;
+		}
 	}
 }
 

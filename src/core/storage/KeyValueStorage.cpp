@@ -87,6 +87,20 @@ std::string KeyValueStorage::get(const std::string& key) {
 		return i->second;
 	}
 
+	if (streams.size() == 0) {
+		for (int i = 0; i < 100; i++) {
+			std::string file = directory + "/data" + std::to_string(i) + ".dat";
+			if (std::filesystem::exists(file)) {
+				auto stream = std::make_shared<std::ifstream>();
+				stream->open(file, std::ios::binary);
+				streams.push_back(stream);
+			}
+			else {
+				break;
+			}
+		}
+	}
+
 	Index::Entry entry = index.get(key);
 	if (streams.size() > entry.fileId) {
 		auto &stream = *streams[entry.fileId].get();
@@ -103,6 +117,13 @@ std::string KeyValueStorage::get(const std::string& key) {
 void KeyValueStorage::set(const std::string& key, const std::string& value) {
 	Index::Entry entry;
 	entry.offset = writeStream.tellp();
+	while (entry.offset == -1) {
+		writeStream.close();
+		std::string file = directory + "/data" + std::to_string(writeStreamId) + ".dat";
+		writeStream.open(file, std::ios::binary | std::ios::app);
+		writeStream.seekp(0, std::ios::end);
+		entry.offset = writeStream.tellp();
+	}
 
 	if (entry.offset + 4 + value.size() > maxFileSize) {
 		writeStream.close();
@@ -176,6 +197,7 @@ void KeyValueStorage::Index::set(const std::string& key, Entry entry) {
 	entries[key] = entry;
 	writeStr(stream, key);
 	write(stream, entry);
+	stream.flush();
 }
 
 bool KeyValueStorage::Index::has(const std::string& key) {
@@ -193,4 +215,5 @@ void KeyValueStorage::Index::remove(const std::string& key) {
 	entry.offset = -1;
 	writeStr(stream, key);
 	write(stream, entry);
+	stream.flush();
 }
