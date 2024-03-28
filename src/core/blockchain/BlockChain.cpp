@@ -59,6 +59,39 @@ void BlockChain::addTransaction(const Transaction& transaction) {
 	}
 }
 
+bool BlockChain::resetTip(const Hash& blockHash) {
+	if (blockHash == Hash(0)) {
+		blockList.clear();
+		blockCount = 0;
+		latestBlock = Hash(0);
+		addBlock(config.genesisBlock);
+		addBlockToTip(config.genesisBlockHash);
+		accountTree.reset(getBlock(latestBlock).header.accountTreeRoot);
+		return true;
+	}
+
+	int blockNumber = getBlockHeader(blockHash).blockNumber;
+
+	if (blockList.size() >= blockNumber) {
+		return false;
+	}
+	if (blockList[blockNumber] != blockHash) {
+		return false;
+	}
+
+	blockList.resize(blockNumber+1);
+	blockCount = blockList.size();
+	if (blockList.size() > 0) {
+		latestBlock = blockList.back();
+	}
+	else {
+		latestBlock = Hash(0);
+	}
+	saveBlockList();
+	accountTree.reset(getBlock(latestBlock).header.accountTreeRoot);
+	return true;
+}
+
 bool BlockChain::addBlockToTip(const Hash& blockHash, bool check) {
 	if (check) {
 		if (blockStorage.has(blockHash)) {

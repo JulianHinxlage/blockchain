@@ -11,7 +11,7 @@ class Account {
 public:
 	uint32_t transactionCount = 0;
 	uint32_t unused = 0;
-	uint64_t balance = 0;
+	Amount balance = 0;
 };
 
 typedef BinaryTree<EccPublicKey, Account> AccountTree;

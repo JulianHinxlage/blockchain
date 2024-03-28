@@ -6,6 +6,7 @@
 
 #include "type.h"
 #include "cryptography/ecc.h"
+#include "Amount.h"
 #include <vector>
 #include <string>
 
@@ -16,8 +17,8 @@ public:
 	uint64_t timestamp = 0;
 	EccPublicKey sender = 0;
 	EccPublicKey recipient = 0;
-	uint64_t amount = 0;
-	uint64_t fee = 0;
+	Amount amount = 0;
+	Amount fee = 0;
 	Hash dataHash = 0;
 	EccSignature signature = 0;
 

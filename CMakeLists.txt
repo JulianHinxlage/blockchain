@@ -35,9 +35,10 @@ add_library(${PROJECT_NAME} STATIC ${SOURCES})
 include_directories(${PROJECT_NAME} PUBLIC src/core)
 set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER ${SOLUTION_NAME})
 
+set(OPENSSL_USE_STATIC_LIBS TRUE)
 find_package(OpenSSL REQUIRED)
-target_include_directories(${PROJECT_NAME} PUBLIC ${OPENSSL_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIRS})
-target_link_libraries(${PROJECT_NAME} PUBLIC ${OPENSSL_LIBRARIES})
+target_include_directories(${PROJECT_NAME} PUBLIC ${OPENSSL_INCLUDE_DIR})
+target_link_libraries(${PROJECT_NAME} PUBLIC ${OPENSSL_LIBRARIES} OpenSSL::Crypto)
 
 
 ### Test #########

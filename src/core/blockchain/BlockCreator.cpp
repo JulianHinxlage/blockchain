@@ -42,7 +42,7 @@ Block& BlockCreator::endBlock() {
 	return block;
 }
 
-Transaction BlockCreator::createTransaction(const EccPublicKey& sender, const EccPublicKey& recipient, uint64_t amount, uint64_t fee) {
+Transaction BlockCreator::createTransaction(const EccPublicKey& sender, const EccPublicKey& recipient, Amount amount, uint64_t fee) {
 	Transaction tx;
 	tx.header.version = blockChain->config.transactionVersion;
 	tx.header.timestamp = time(nullptr);

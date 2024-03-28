@@ -23,7 +23,7 @@ public:
 		EccPublicKey genesisAddress = fromHex<EccPublicKey>("");
 		Account genesisAccount;
 		genesisAccount.transactionCount = 0;
-		genesisAccount.balance = 1000000;
+		genesisAccount.balance = coinToAmount("1000000000");
 
 		accountTree.reset();
 		accountTree.set(genesisAddress, genesisAccount);

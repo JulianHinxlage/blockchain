@@ -26,6 +26,7 @@ public:
 
 	void addBlock(const Block& block);
 	void addTransaction(const Transaction& transaction);
+	bool resetTip(const Hash& blockHash);
 	bool addBlockToTip(const Hash& blockHash, bool check = true);
 
 	void loadBlockList();
