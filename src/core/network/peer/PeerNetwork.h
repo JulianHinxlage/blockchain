@@ -34,7 +34,8 @@ enum class PeerState {
 enum class PeerNetworkState {
 	DISCONNECTED,
 	CONNECTING_TO_ENTRY_NODE,
-	JOINING,
+	JOINING_LOOKUP,
+	JOINING_CONNECTING,
 	CONNECTED,
 };
 
@@ -48,14 +49,17 @@ public:
 class PeerNetwork {
 public:
 	std::function<void(const std::string &msg, PeerId source, bool broadcast)> messageCallback;
-	std::function<void(const std::string& msg, int level)> logCallback;
+	std::function<void(const std::string& msg, bool error)> logCallback;
+	std::function<void(PeerNetworkState)> onStateChanged;
 
 	~PeerNetwork();
-	void connect(uint16_t port);
+	void connect(const std::string &address, uint16_t port);
 	void disconnect();
 	void addEntryNode(const std::string& address, uint16_t port);
 	void wait();
+	uint16_t getPort();
 	void send(PeerId destination, const std::string& message);
+	PeerId getRandomNeighbor();
 	void broadcast(const std::string& message);
 	bool isConnected();
 private:
@@ -78,6 +82,7 @@ private:
 	void join(net::Connection* conn, PeerId relay);
 	Peer* nextPeer(PeerId id, bool ignoreLocal, PeerId except = PeerId(0));
 	void sendRaw(PeerId destination, const Buffer& msg);
+	void changeState(PeerNetworkState newState);
 
 	Buffer msgCreateHandshake();
 	Buffer msgCreateHandshakeReply();

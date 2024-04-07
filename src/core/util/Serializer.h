@@ -20,6 +20,8 @@ public:
 
 	void writeBytes(const uint8_t* data, int size);
 	void readBytes(uint8_t* data, int size);
+	void writeStr(const std::string &str);
+	void readStr(std::string& str);
 
 	template<typename T>
 	void write(const T& t) {

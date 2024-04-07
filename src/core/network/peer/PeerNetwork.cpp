@@ -4,34 +4,13 @@
 
 #include "PeerNetwork.h"
 #include "util/hex.h"
-#include <random>
-
-template<typename T>
-T random() {
-	static std::mt19937_64 *rng = nullptr;
-	if (rng == nullptr) {
-		rng = new std::mt19937_64();
-		rng->seed(std::random_device()());
-	}
-	T output = T();
-	uint64_t value = rng->operator()();
-	int j = 0;
-	for (int i = 0; i < sizeof(T); i++) {
-		if (j >= sizeof(value)) {
-			value = rng->operator()();
-			j = 0;
-		}
-		((uint8_t*)&output)[i] = ((uint8_t*)&value)[j++];
-	}
-	return output;
-}
-
+#include "util/random.h"
 
 PeerNetwork::~PeerNetwork() {
 	disconnect();
 }
 
-void PeerNetwork::connect(uint16_t port) {
+void PeerNetwork::connect(const std::string& address, uint16_t port) {
 	state = PeerNetworkState::DISCONNECTED;
 	peerId = random<PeerId>();
 	pendingLookups = 0;
@@ -75,9 +54,9 @@ void PeerNetwork::connect(uint16_t port) {
 	}
 	server.run();
 	this->port = port;
-	this->address = "127.0.0.1";
+	this->address = address;
 
-	state = PeerNetworkState::CONNECTING_TO_ENTRY_NODE;
+	changeState(PeerNetworkState::CONNECTING_TO_ENTRY_NODE);
 	for (auto& node : entryNodes) {
 		if (node.getAddress() != "127.0.0.1" || node.getPort() != port) {
 			if (server.connectAsClient(node) == net::ErrorCode::NO_ERROR) {
@@ -112,7 +91,7 @@ void PeerNetwork::disconnect() {
 		p->conn->disconnect();
 	}
 	peers.clear();
-	state = PeerNetworkState::DISCONNECTED;
+	changeState(PeerNetworkState::DISCONNECTED);
 }
 
 void PeerNetwork::addEntryNode(const std::string& address, uint16_t port) {
@@ -121,6 +100,10 @@ void PeerNetwork::addEntryNode(const std::string& address, uint16_t port) {
 
 void PeerNetwork::wait() {
 	server.waitWhileRunning();
+}
+
+uint16_t PeerNetwork::getPort() {
+	return port;
 }
 
 void PeerNetwork::send(PeerId destination, const std::string& message) {
@@ -134,6 +117,31 @@ void PeerNetwork::send(PeerId destination, const std::string& message) {
 	packet.write(peerId);
 	packet.writeBytes(message.data(), message.size());
 	sendRaw(destination, packet);
+}
+
+PeerId PeerNetwork::getRandomNeighbor() {
+	int count = 0;
+	for (auto& peer : peers) {
+		if (peer->state == PeerState::CONNECTED) {
+			count++;
+		}
+	}
+	if (count == 0) {
+		return PeerId(0);
+	}
+	else {
+		int index = random<uint32_t>() % count;
+		count = 0;
+		for (auto& peer : peers) {
+			if (peer->state == PeerState::CONNECTED) {
+				if (index == count) {
+					return peer->id;
+				}
+				count++;
+			}
+		}
+		return PeerId(0);
+	}
 }
 
 void PeerNetwork::broadcast(const std::string& message) {
@@ -157,8 +165,10 @@ void PeerNetwork::broadcast(const std::string& message) {
 
 bool PeerNetwork::isConnected() {
 	if (state == PeerNetworkState::CONNECTED) {
-		if (peers.size() > 0) {
-			return true;
+		for (auto& peer : peers) {
+			if (peer->state == PeerState::CONNECTED) {
+				return true;
+			}
 		}
 	}
 	return false;
@@ -187,6 +197,10 @@ void PeerNetwork::onDisconnect(net::Connection* conn) {
 				break;
 			}
 		}
+	}
+
+	if (peers.size() == 0) {
+		changeState(PeerNetworkState::DISCONNECTED);
 	}
 
 	int minIndex = -1;
@@ -243,8 +257,14 @@ void PeerNetwork::onMessage(net::Connection* conn, PeerId msgSource, Buffer& msg
 		}
 
 		if (state == PeerNetworkState::CONNECTING_TO_ENTRY_NODE) {
-			state = PeerNetworkState::JOINING;
+			changeState(PeerNetworkState::JOINING_LOOKUP);
 			join(conn, source);
+		}
+		else if (state == PeerNetworkState::JOINING_CONNECTING) {
+			changeState(PeerNetworkState::CONNECTED);
+		}
+		else if (state == PeerNetworkState::DISCONNECTED) {
+			changeState(PeerNetworkState::CONNECTED);
 		}
 	}
 	else if (opcode == PeerOpcode::ROUTE) {
@@ -300,17 +320,31 @@ void PeerNetwork::onMessage(net::Connection* conn, PeerId msgSource, Buffer& msg
 				}
 			}
 
-			if (pendingLookups == 0 && state == PeerNetworkState::JOINING) {
-				state = PeerNetworkState::CONNECTED;
+			if (pendingLookups == 0 && state == PeerNetworkState::JOINING_LOOKUP) {
 				{
 					std::unique_lock<std::mutex> lock(mutex);
 					for (auto& p : peers) {
 						if (p->state == PeerState::CONNECTED) {
 							if (!lookupRelies.contains(p->id)) {
+								p->state = PeerState::DISCONNECTED;
 								p->conn->disconnect();
 							}
 						}
 					}
+				}
+
+				bool found = false;
+				for (auto& p : peers) {
+					if (p->state == PeerState::CONNECTED) {
+						found = true;
+					}
+				}
+
+				if (found) {
+					changeState(PeerNetworkState::CONNECTED);
+				}
+				else {
+					changeState(PeerNetworkState::JOINING_CONNECTING);
 				}
 			}
 		}
@@ -380,6 +414,15 @@ void PeerNetwork::sendRaw(PeerId destination, const Buffer& msg) {
 	Peer* peer = nextPeer(destination, true);
 	if (peer) {
 		peer->conn->write(msg);
+	}
+}
+
+void PeerNetwork::changeState(PeerNetworkState newState) {
+	if (state != newState) {
+		state = newState;
+		if (onStateChanged) {
+			onStateChanged(state);
+		}
 	}
 }
 

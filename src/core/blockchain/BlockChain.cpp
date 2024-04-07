@@ -112,6 +112,24 @@ bool BlockChain::addBlockToTip(const Hash& blockHash, bool check) {
 	return true;
 }
 
+Hash BlockChain::getLatestBlock() {
+	return latestBlock;
+}
+
+int BlockChain::getBlockCount() {
+	return blockCount;
+}
+
+Hash BlockChain::getBlockHash(int blockNumber) {
+	if (blockNumber < blockCount) {
+		int offset = blockCount - blockList.size();
+		if (blockNumber >= offset) {
+			return blockList[blockNumber - offset];
+		}
+	}
+	return Hash(0);
+}
+
 void BlockChain::loadBlockList() {
 	std::ifstream stream(directory + "/chain.dat");
 	blockList.clear();

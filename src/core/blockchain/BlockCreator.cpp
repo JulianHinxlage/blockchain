@@ -6,10 +6,10 @@
 
 void BlockCreator::beginBlock(const EccPublicKey& validator) {
 	block = Block();
-	BlockHeader prev = blockChain->getBlockHeader(blockChain->latestBlock);
+	BlockHeader prev = blockChain->getBlockHeader(blockChain->getLatestBlock());
 	block.header.version = blockChain->config.blockVersion;
 	block.header.timestamp = time(nullptr);
-	block.header.previousBlockHash = blockChain->latestBlock;
+	block.header.previousBlockHash = blockChain->getLatestBlock();
 	block.header.blockNumber = prev.blockNumber + 1;
 	block.header.validator = validator;
 	block.header.beneficiary = validator;

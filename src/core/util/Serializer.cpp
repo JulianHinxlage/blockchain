@@ -73,6 +73,18 @@ void Serializer::readBytes(uint8_t* data, int size) {
 	}
 }
 
+void Serializer::writeStr(const std::string& str) {
+	write<int>(str.size());
+	writeBytes((uint8_t*)str.data(), str.size());
+}
+
+void Serializer::readStr(std::string& str) {
+	int size = read<int>();
+	str.resize(size);
+	readBytes((uint8_t*)str.data(), size);
+}
+
+
 uint8_t *Serializer::data() {
 	return dataPtr;
 }

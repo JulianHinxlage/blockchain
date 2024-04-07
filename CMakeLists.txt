@@ -40,7 +40,6 @@ find_package(OpenSSL REQUIRED)
 target_include_directories(${PROJECT_NAME} PUBLIC ${OPENSSL_INCLUDE_DIR})
 target_link_libraries(${PROJECT_NAME} PUBLIC ${OPENSSL_LIBRARIES} OpenSSL::Crypto)
 
-
 ### Test #########
 project(test)
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/test/*.cpp src/test/*.h)

@@ -13,11 +13,17 @@ public:
 	KeyValueStorage transactionStorage;
 	KeyValueStorage blockStorage;
 	AccountTree accountTree;
+
 	Hash latestBlock;
 	uint64_t blockCount;
 	std::vector<Hash> blockList;
 
 	void init(const std::string& directory);
+
+	Hash getLatestBlock();
+	int getBlockCount();
+	Hash getBlockHash(int blockNumber);
+
 
 	TransactionHeader getTransactionHeader(const Hash& hash);
 	Transaction getTransaction(const Hash& hash);
