@@ -5,27 +5,26 @@
 #include "PeerNetwork.h"
 #include "util/hex.h"
 #include "util/random.h"
+#include "util/log.h"
 
 PeerNetwork::~PeerNetwork() {
 	disconnect();
 }
 
-void PeerNetwork::connect(const std::string& address, uint16_t port) {
+void PeerNetwork::connect(const std::string& address, uint16_t port, PeerType type) {
 	state = PeerNetworkState::DISCONNECTED;
+	this->type = type;
+
 	peerId = random<PeerId>();
 	pendingLookups = 0;
 	server.packetize = true;
 
 	server.connectCallback = [&](net::Connection* conn) {
-		if (logCallback) {
-			logCallback("connection: " + conn->getAddress() + " " + std::to_string(conn->getPort()), 0);
-		}
+		log(LogLevel::DEBUG, "Network", "connection %s %i", conn->getAddress().c_str(), conn->getPort());
 		onConnect(conn);
 	};
 	server.disconnectCallback = [&](net::Connection* conn) {
-		if (logCallback) {
-			logCallback("disconnect: " + conn->getAddress() + " " + std::to_string(conn->getPort()), 0);
-		}
+		log(LogLevel::DEBUG, "Network", "disconnect %s %i", conn->getAddress().c_str(), conn->getPort());
 		onDisconnect(conn);
 	};
 	server.readCallback = [&](net::Connection* conn, Buffer& msg) {
@@ -46,25 +45,30 @@ void PeerNetwork::connect(const std::string& address, uint16_t port) {
 		
 		onMessage(conn, peer->id, msg, true);
 	};
-	for (int i = 0; i < 100; i++) {
-		if (server.listen(port, false, false, true) == net::ErrorCode::NO_ERROR) {
-			break;
+
+	if (type != PeerType::CLIENT) {
+		for (int i = 0; i < 100; i++) {
+			if (server.listen(port, false, false, true) == net::ErrorCode::NO_ERROR) {
+				break;
+			}
+			port++;
 		}
-		port++;
+		server.run();
+		this->port = port;
+		this->address = address;
 	}
-	server.run();
-	this->port = port;
-	this->address = address;
 
 	changeState(PeerNetworkState::CONNECTING_TO_ENTRY_NODE);
 	for (auto& node : entryNodes) {
-		if (node.getAddress() != "127.0.0.1" || node.getPort() != port) {
-			if (server.connectAsClient(node) == net::ErrorCode::NO_ERROR) {
-				break;
-			}
-			else {
-				if (peers.size() > 0) {
+		if (state != PeerNetworkState::DISCONNECTED) {
+			if (node.getAddress() != "127.0.0.1" || node.getPort() != port || type == PeerType::CLIENT) {
+				if (server.connectAsClient(node) == net::ErrorCode::NO_ERROR) {
 					break;
+				}
+				else {
+					if (peers.size() > 0) {
+						break;
+					}
 				}
 			}
 		}
@@ -72,14 +76,10 @@ void PeerNetwork::connect(const std::string& address, uint16_t port) {
 
 	server.errorCallback = [&](net::Connection* conn, net::ErrorCode error) {
 		if (conn) {
-			if (logCallback) {
-				logCallback("error " + std::string(net::getErrorString(error)) + ": " + conn->getAddress() + " " + std::to_string(conn->getPort()), 1);
-			}
+			log(LogLevel::TRACE, "Network", "socket error %s: %s %i", net::getErrorString(error), conn->getAddress().c_str(), conn->getPort());
 		}
 		else {
-			if (logCallback) {
-				logCallback("error " + std::string(net::getErrorString(error)), 1);
-			}
+			log(LogLevel::TRACE, "Network", "socket error %s", net::getErrorString(error));
 		}
 	};
 }
@@ -123,7 +123,9 @@ PeerId PeerNetwork::getRandomNeighbor() {
 	int count = 0;
 	for (auto& peer : peers) {
 		if (peer->state == PeerState::CONNECTED) {
-			count++;
+			if (peer->type == PeerType::SERVER) {
+				count++;
+			}
 		}
 	}
 	if (count == 0) {
@@ -134,14 +136,28 @@ PeerId PeerNetwork::getRandomNeighbor() {
 		count = 0;
 		for (auto& peer : peers) {
 			if (peer->state == PeerState::CONNECTED) {
-				if (index == count) {
-					return peer->id;
+				if (peer->type == PeerType::SERVER) {
+					if (index == count) {
+						return peer->id;
+					}
+					count++;
 				}
-				count++;
 			}
 		}
 		return PeerId(0);
 	}
+}
+
+int PeerNetwork::getNeighborCount() {
+	int count = 0;
+	for (auto& peer : peers) {
+		if (peer->state == PeerState::CONNECTED) {
+			if (peer->type == PeerType::SERVER) {
+				count++;
+			}
+		}
+	}
+	return count;
 }
 
 void PeerNetwork::broadcast(const std::string& message) {
@@ -235,10 +251,12 @@ void PeerNetwork::onMessage(net::Connection* conn, PeerId msgSource, Buffer& msg
 
 	if (opcode == PeerOpcode::HANDSHAKE && direct) {
 		{
+			PeerType type = msg.read<PeerType>();
 			std::unique_lock<std::mutex> lock(mutex);
 			for (auto& peer : peers) {
 				if (peer->conn == conn) {
 					peer->id = source;
+					peer->type = type;
 				}
 			}
 		}
@@ -247,18 +265,24 @@ void PeerNetwork::onMessage(net::Connection* conn, PeerId msgSource, Buffer& msg
 	}
 	else if (opcode == PeerOpcode::HANDSHAKE_REPLY && direct) {
 		{
+			PeerType type = msg.read<PeerType>();
 			std::unique_lock<std::mutex> lock(mutex);
 			for (auto& peer : peers) {
 				if (peer->conn == conn) {
 					peer->id = source;
 					peer->state = PeerState::CONNECTED;
+					peer->type = type;
 				}
 			}
 		}
-
 		if (state == PeerNetworkState::CONNECTING_TO_ENTRY_NODE) {
-			changeState(PeerNetworkState::JOINING_LOOKUP);
-			join(conn, source);
+			if (type == PeerType::CLIENT) {
+				changeState(PeerNetworkState::CONNECTED);
+			}
+			else {
+				changeState(PeerNetworkState::JOINING_LOOKUP);
+				join(conn, source);
+			}
 		}
 		else if (state == PeerNetworkState::JOINING_CONNECTING) {
 			changeState(PeerNetworkState::CONNECTED);
@@ -302,8 +326,8 @@ void PeerNetwork::onMessage(net::Connection* conn, PeerId msgSource, Buffer& msg
 		if (pendingLookups > 0) {
 			pendingLookups--;
 
-			if (!lookupRelies.contains(source)) {
-				lookupRelies.insert(source);
+			if (!lookupReplies.contains(source)) {
+				lookupReplies.insert(source);
 
 				bool found = false;
 				{
@@ -325,7 +349,7 @@ void PeerNetwork::onMessage(net::Connection* conn, PeerId msgSource, Buffer& msg
 					std::unique_lock<std::mutex> lock(mutex);
 					for (auto& p : peers) {
 						if (p->state == PeerState::CONNECTED) {
-							if (!lookupRelies.contains(p->id)) {
+							if (!lookupReplies.contains(p->id)) {
 								p->state = PeerState::DISCONNECTED;
 								p->conn->disconnect();
 							}
@@ -400,8 +424,10 @@ Peer* PeerNetwork::nextPeer(PeerId id, bool ignoreLocal, PeerId except) {
 				if (p->id != except) {
 					PeerId dist = p->id ^ id;
 					if (dist < minDist || (ignoreLocal && next == nullptr)) {
-						minDist = dist;
-						next = p.get();
+						if (p->type == PeerType::SERVER || p->id == id) {
+							minDist = dist;
+							next = p.get();
+						}
 					}
 				}
 			}
@@ -430,6 +456,7 @@ Buffer PeerNetwork::msgCreateHandshake(){
 	Buffer msg;
 	msg.write(PeerOpcode::HANDSHAKE);
 	msg.write(peerId);
+	msg.write(type);
 	return msg;
 }
 
@@ -437,6 +464,7 @@ Buffer PeerNetwork::msgCreateHandshakeReply() {
 	Buffer msg;
 	msg.write(PeerOpcode::HANDSHAKE_REPLY);
 	msg.write(peerId);
+	msg.write(type);
 	return msg;
 }
 

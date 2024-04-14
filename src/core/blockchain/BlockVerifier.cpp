@@ -2,9 +2,10 @@
 // Copyright (c) 2024 Julian Hinxlage. All rights reserved.
 //
 
-#include "BlockValidator.h"
+#include "BlockVerifier.h"
+#include "util/log.h"
 
-BlockError BlockValidator::validateBlock(const Block& block) {
+BlockError BlockVerifier::verifyBlock(const Block& block) {
 	if (block.header.caclulateHash() == blockChain->config.genesisBlockHash) {
 		return BlockError::VALID;
 	}
@@ -44,8 +45,9 @@ BlockError BlockValidator::validateBlock(const Block& block) {
 			return BlockError::TRANSACTION_NOT_FOUND;
 		}
 
-		TransactionError error = validateTransaction(tx, block.header);
+		TransactionError error = verifyTransaction(tx, true, block.header.beneficiary);
 		if (error != TransactionError::VALID) {
+			log(LogLevel::DEBUG, "Block Validator", "invalid transaction: %s", transactionErrorToString(error));
 			return BlockError::INVALID_TRANSACTION;
 		}
 	}
@@ -57,7 +59,7 @@ BlockError BlockValidator::validateBlock(const Block& block) {
 	return BlockError::VALID;
 }
 
-TransactionError BlockValidator::validateTransaction(const Transaction& transaction, const BlockHeader &block) {
+TransactionError BlockVerifier::verifyTransaction(const Transaction& transaction, bool updateAccounts, EccPublicKey beneficiary) {
 	if (transaction.header.version != blockChain->config.transactionVersion) {
 		return TransactionError::INVALID_VERSION;
 	}
@@ -91,24 +93,30 @@ TransactionError BlockValidator::validateTransaction(const Transaction& transact
 		return TransactionError::INVALID_TRANSACTION_NUMBER;
 	}
 
-	sender.balance -= transaction.header.amount + transaction.header.fee;
-	sender.transactionCount++;
-	blockChain->accountTree.set(transaction.header.sender, sender);
+	if (updateAccounts) {
+		sender.balance -= transaction.header.amount + transaction.header.fee;
+		sender.transactionCount++;
+		blockChain->accountTree.set(transaction.header.sender, sender);
+	}
 
 	Account recipient = blockChain->accountTree.get(transaction.header.recipient);
 	if (transaction.header.amount + recipient.balance < recipient.balance) {
 		return TransactionError::INVALID_BALANCE;
 	}
-	recipient.balance += transaction.header.amount;
-	blockChain->accountTree.set(transaction.header.recipient, recipient);
 
-	Account beneficiary = blockChain->accountTree.get(block.beneficiary);
-	if (transaction.header.fee + beneficiary.balance < beneficiary.balance) {
-		return TransactionError::INVALID_BALANCE;
+	if (updateAccounts) {
+		recipient.balance += transaction.header.amount;
+		blockChain->accountTree.set(transaction.header.recipient, recipient);
 	}
-	beneficiary.balance += transaction.header.fee;
-	blockChain->accountTree.set(block.beneficiary, beneficiary);
 
+	if (updateAccounts && beneficiary != EccPublicKey()) {
+		Account beneficiaryAccount = blockChain->accountTree.get(beneficiary);
+		if (transaction.header.fee + beneficiaryAccount.balance < beneficiaryAccount.balance) {
+			return TransactionError::INVALID_BALANCE;
+		}
+		beneficiaryAccount.balance += transaction.header.fee;
+		blockChain->accountTree.set(beneficiary, beneficiaryAccount);
+	}
 	return TransactionError::VALID;
 }
 

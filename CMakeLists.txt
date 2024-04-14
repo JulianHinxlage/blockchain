@@ -40,6 +40,23 @@ find_package(OpenSSL REQUIRED)
 target_include_directories(${PROJECT_NAME} PUBLIC ${OPENSSL_INCLUDE_DIR})
 target_link_libraries(${PROJECT_NAME} PUBLIC ${OPENSSL_LIBRARIES} OpenSSL::Crypto)
 
+### Wallet #########
+project(wallet)
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/wallet/*.cpp src/wallet/*.h)
+add_executable(${PROJECT_NAME} ${SOURCES})
+include_directories(${PROJECT_NAME} PUBLIC src/wallet)
+target_link_libraries(${PROJECT_NAME} core)
+set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER ${SOLUTION_NAME})
+set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
+
+### Validator #########
+project(validator)
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/validator/*.cpp src/validator/*.h)
+add_executable(${PROJECT_NAME} ${SOURCES})
+include_directories(${PROJECT_NAME} PUBLIC src/validator)
+target_link_libraries(${PROJECT_NAME} core)
+set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER ${SOLUTION_NAME})
+
 ### Test #########
 project(test)
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/test/*.cpp src/test/*.h)
@@ -47,7 +64,5 @@ add_executable(${PROJECT_NAME} ${SOURCES})
 include_directories(${PROJECT_NAME} PUBLIC src/test)
 target_link_libraries(${PROJECT_NAME} core)
 set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER ${SOLUTION_NAME})
-set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
-
 
 project(${SOLUTION_NAME})

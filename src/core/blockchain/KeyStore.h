@@ -9,9 +9,9 @@
 
 class KeyStore {
 public:
-	void createKey(const std::string& file);
-	void loadKey(const std::string& file);
-	void createOrLoadKey(const std::string& file);
+	void create(const std::string& file);
+	void load(const std::string& file);
+	void loadOrCreate(const std::string& file);
 
 	EccPublicKey getPublicKey();
 	EccPrivateKey getPrivateKey();

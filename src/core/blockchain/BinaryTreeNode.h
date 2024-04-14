@@ -7,6 +7,7 @@
 #include "type.h"
 #include "util/Serializer.h"
 #include "cryptography/sha.h"
+#include <memory>
 
 enum class BinaryTreeNodeType : uint8_t {
 	NONE,
@@ -67,19 +68,10 @@ public:
 
 	BinaryTreeNodeType type;
 	uint16_t pathLength;
-	union {
-		struct { //BRANCH
-			Hash childs[2];
-		};
-		struct { //EXTENSION
-			Key path;
-			Hash child;
-		};
-		struct { //LEAF
-			Key path;
-			ValueType value;
-		};
-	};
+	
+	Hash childs[2];
+	Key path;
+	ValueType value;
 
 	std::shared_ptr<Node> nodes[2];
 	KeyValueStorage* storage;
@@ -87,7 +79,6 @@ public:
 	BinaryTreeNode() {
 		type = BinaryTreeNodeType::NONE;
 		pathLength = 0;
-		child = 0;
 		path = Key();
 		value = ValueType();
 		childs[0] = 0;
@@ -104,7 +95,7 @@ public:
 		}
 		else if (type == BinaryTreeNodeType::EXTENSION) {
 			serial.write(path);
-			serial.write(child);
+			serial.write(childs[0]);
 		}
 		else if (type == BinaryTreeNodeType::LEAF) {
 			serial.write(path);
@@ -123,7 +114,7 @@ public:
 		}
 		else if (type == BinaryTreeNodeType::EXTENSION) {
 			serial.read(path);
-			serial.read(child);
+			serial.read(childs[0]);
 		}
 		else if (type == BinaryTreeNodeType::LEAF) {
 			serial.read(path);
@@ -145,8 +136,8 @@ public:
 			}
 		}
 		else if (type == BinaryTreeNodeType::EXTENSION) {
-			if (child == Hash(0)) {
-				child = nodes[0]->calculateHash();
+			if (childs[0] == Hash(0)) {
+				childs[0] = nodes[0]->calculateHash();
 			}
 		}
 		Hash hash = sha256(serial());
@@ -189,13 +180,13 @@ public:
 				}
 				else if (type == Type::EXTENSION) {
 					if (!nodes[0]) {
-						if (child == Hash(0)) {
+						if (childs[0] == Hash(0)) {
 							return nullptr;
 						}
 						else {
 							auto node = std::make_shared<Node>();
 							node->storage = storage;
-							node->load(child);
+							node->load(childs[0]);
 							nodes[0] = node;
 						}
 					}
@@ -286,7 +277,7 @@ public:
 						std::shared_ptr<Node> node = std::make_shared<Node>();
 						node->storage = storage;
 						*node = *this;
-						node->child = Hash(0);
+						node->childs[0] = Hash(0);
 						node->nodes[0] = newRoot;
 						newRoot = node;
 					}
@@ -336,7 +327,7 @@ public:
 						for (int i = 0; i < oldLeaf->pathLength; i++) {
 							oldLeaf->path.setBit(i, path.getBit(i + match + 1));
 						}
-						oldLeaf->child = child;
+						oldLeaf->childs[0] = childs[0];
 						oldLeaf->nodes[0] = nodes[0];
 					}
 				}

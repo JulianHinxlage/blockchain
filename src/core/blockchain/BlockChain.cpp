@@ -7,6 +7,8 @@
 
 void BlockChain::init(const std::string& directory) {
 	this->directory = directory;
+	accountTreeStorage.init(directory + "/accounts");
+	accountTree.storage = &accountTreeStorage;
 	accountTree.init(directory + "/accounts");
 	config.initDevNet(accountTree);
 	blockStorage.init(directory + "/blocks");
@@ -47,6 +49,14 @@ Block BlockChain::getBlock(const Hash &hash) {
 	return block;
 }
 
+bool BlockChain::hasBlock(const Hash& hash) {
+	return blockStorage.has(hash);
+}
+
+bool BlockChain::hasTransaction(const Hash& hash) {
+	return transactionStorage.has(hash);
+}
+
 void BlockChain::addBlock(const Block& block) {
 	if (!blockStorage.has(block.blockHash)) {
 		blockStorage.set(block.blockHash, block.serial());
@@ -72,7 +82,7 @@ bool BlockChain::resetTip(const Hash& blockHash) {
 
 	int blockNumber = getBlockHeader(blockHash).blockNumber;
 
-	if (blockList.size() >= blockNumber) {
+	if (blockList.size() <= blockNumber) {
 		return false;
 	}
 	if (blockList[blockNumber] != blockHash) {

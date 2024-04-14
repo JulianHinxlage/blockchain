@@ -7,6 +7,8 @@
 #include <string>
 #include <unordered_map>
 #include <fstream>
+#include <memory>
+#include <vector>
 
 class KeyValueStorage {
 public:

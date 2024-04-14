@@ -7,7 +7,7 @@
 #include <fstream>
 #include <filesystem>
 
-void KeyStore::createKey(const std::string& file) {
+void KeyStore::create(const std::string& file) {
 	if (std::filesystem::exists(file)) {
 		return;
 	}
@@ -18,11 +18,12 @@ void KeyStore::createKey(const std::string& file) {
 	content += toHex(pub) + "\n";
 	content += toHex(priv) + "\n";
 
+	std::filesystem::create_directories(std::filesystem::path(file).parent_path());
 	std::ofstream stream(file);
 	stream.write(content.data(), content.size());
 }
 
-void KeyStore::loadKey(const std::string& file) {
+void KeyStore::load(const std::string& file) {
 	if (!std::filesystem::exists(file)) {
 		return;
 	}
@@ -35,12 +36,12 @@ void KeyStore::loadKey(const std::string& file) {
 	priv = fromHex<EccPrivateKey>(line);
 }
 
-void KeyStore::createOrLoadKey(const std::string& file) {
+void KeyStore::loadOrCreate(const std::string& file) {
 	if (std::filesystem::exists(file)) {
-		loadKey(file);
+		load(file);
 	}
 	else {
-		createKey(file);
+		create(file);
 	}
 }
 

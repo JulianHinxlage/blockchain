@@ -23,7 +23,6 @@ public:
 		WSADATA wsaData;
 		int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
 		if (result != NO_ERROR) {
-			printf("WSA startup failed with code %i", result);
 			return;
 		}
 	}

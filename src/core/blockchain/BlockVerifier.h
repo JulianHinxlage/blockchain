@@ -32,10 +32,10 @@ enum class TransactionError {
 const char* blockErrorToString(BlockError error);
 const char* transactionErrorToString(TransactionError error);
 
-class BlockValidator {
+class BlockVerifier {
 public:
 	BlockChain *blockChain;
 
-	BlockError validateBlock(const Block& block);
-	TransactionError validateTransaction(const Transaction& transaction, const BlockHeader& block);
+	BlockError verifyBlock(const Block& block);
+	TransactionError verifyTransaction(const Transaction& transaction, bool updateAccounts = false, EccPublicKey beneficiary = EccPublicKey());
 };

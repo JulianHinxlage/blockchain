@@ -112,9 +112,9 @@ namespace net {
 	ErrorCode getErrorCodeFromInternal(int internal) {
 		switch (internal) {
 		case 0:
-			return NO_ERROR;
+			return ErrorCode::NO_ERROR;
 		default:
-			return GENERAL_ERROR;
+			return ErrorCode::GENERAL_ERROR;
 		}
 	}
 

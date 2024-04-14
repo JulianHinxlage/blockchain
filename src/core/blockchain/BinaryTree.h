@@ -10,11 +10,12 @@
 template<typename KeyType, typename ValueType>
 class BinaryTree {
 public:
+	KeyValueStorage* storage;
+
 	typedef BinaryTreeNode<KeyType, ValueType> Node;
 	typedef BinaryTreeNodeType Type;
 
 	void init(const std::string& directory, const Hash &root = Hash()) {
-		storage.init(directory, sizeof(KeyType), sizeof(ValueType));
 		reset(root);
 	}
 
@@ -51,20 +52,21 @@ public:
 		return ValueType();
 	}
 
-	void reset(const Hash& root = Hash()) {
+	bool reset(const Hash& root = Hash()) {
 		rootNode = std::make_shared<Node>();
-		rootNode->storage = &storage;
+		rootNode->storage = storage;
 		rootHash = Hash();
 		if (root != Hash()) {
-			if (storage.has(root)) {
+			if (storage->has(root)) {
 				rootNode->load(root);
 				rootHash = root;
+				return true;
 			}
 		}
+		return false;
 	}
 
 private:
-	KeyValueStorage storage;
 	std::shared_ptr<Node> rootNode;
 	Hash rootHash;
 };
