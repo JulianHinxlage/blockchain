@@ -6,15 +6,20 @@
 
 #include "BlockChainConfig.h"
 #include "BinaryTree.h"
+#include "Consensus.h"
+
+typedef BinaryTree<uint64_t, EccPublicKey, false> ValidatorTree;
 
 class BlockChain {
 public:
 	BlockChainConfig config;
 	AccountTree accountTree;
+	ValidatorTree validatorTree;
+	Consensus consensus;
 
 	void init(const std::string& directory);
 
-	Hash getLatestBlock();
+	Hash getHeadBlock();
 	int getBlockCount();
 	Hash getBlockHash(int blockNumber);
 
@@ -30,8 +35,7 @@ public:
 	void addBlock(const Block& block);
 	void addTransaction(const Transaction& transaction);
 	
-	bool resetTip(const Hash& blockHash);
-	bool addBlockToTip(const Hash& blockHash, bool check = true);
+	bool setHeadBlock(const Hash& blockHash);
 
 private:
 	std::string directory;
@@ -39,10 +43,10 @@ private:
 	KeyValueStorage transactionStorage;
 	KeyValueStorage blockStorage;
 	KeyValueStorage accountTreeStorage;
+	KeyValueStorage stakeTreeStorage;
 
-	Hash latestBlock;
-	uint64_t blockCount;
 	std::vector<Hash> blockList;
+	uint64_t blockListStartOffset;
 
 	void loadBlockList();
 	void saveBlockList();

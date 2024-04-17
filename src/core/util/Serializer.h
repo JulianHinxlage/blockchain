@@ -40,6 +40,8 @@ public:
 		return t;
 	}
 
+	std::string readAll();
+
 	uint8_t *data();
 	int size();
 

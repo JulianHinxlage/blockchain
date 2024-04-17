@@ -14,6 +14,7 @@ Hash TransactionHeader::caclulateHash() const {
 void TransactionHeader::sign(const EccPrivateKey& privateKey) {
     Serializer serial;
     serial.write(version);
+    serial.write(type);
     serial.write(transactionNumber);
     serial.write(timestamp);
     serial.write(sender);
@@ -28,6 +29,7 @@ void TransactionHeader::sign(const EccPrivateKey& privateKey) {
 bool TransactionHeader::verifySignature() const {
     Serializer serial;
     serial.write(version);
+    serial.write(type);
     serial.write(transactionNumber);
     serial.write(timestamp);
     serial.write(sender);
@@ -42,6 +44,7 @@ bool TransactionHeader::verifySignature() const {
 std::string TransactionHeader::serial() const {
     Serializer serial;
     serial.write(version);
+    serial.write(type);
     serial.write(transactionNumber);
     serial.write(timestamp);
     serial.write(sender);
@@ -56,6 +59,7 @@ std::string TransactionHeader::serial() const {
 int TransactionHeader::deserial(const std::string& str) {
     Serializer serial(str);
     serial.read(version);
+    serial.read(type);
     serial.read(transactionNumber);
     serial.read(timestamp);
     serial.read(sender);

@@ -1,3 +1,7 @@
+//
+// Copyright (c) 2024 Julian Hinxlage. All rights reserved.
+//
+
 #include "Wallet.h"
 #include "util/log.h"
 
@@ -11,11 +15,11 @@ void Wallet::init(const std::string& chainDir, const std::string& keyFile, const
 
 	node.verifyChain();
 	node.synchronize();
-	log(LogLevel::DEBUG, "Wallet", "chain tip: num=%i %s", node.blockChain.getBlockCount() - 1, toHex(node.blockChain.getLatestBlock()).c_str());
+	log(LogLevel::DEBUG, "Wallet", "chain head: num=%i %s", node.blockChain.getBlockCount() - 1, toHex(node.blockChain.getHeadBlock()).c_str());
 }
 
-void Wallet::sendTransaction(const std::string &address, const std::string& amount, const std::string& fee) {
-	Transaction transaction = node.creator.createTransaction(keyStore.getPublicKey(), fromHex<EccPublicKey>(address), coinToAmount(amount), coinToAmount(fee));
+void Wallet::sendTransaction(const std::string &address, const std::string& amount, const std::string& fee, TransactionType type) {
+	Transaction transaction = node.creator.createTransaction(keyStore.getPublicKey(), fromHex<EccPublicKey>(address), coinToAmount(amount), coinToAmount(fee), type);
 	transaction.header.sign(keyStore.getPrivateKey());
 	transaction.transactionHash = transaction.header.caclulateHash();
 	TransactionError error = node.verifier.verifyTransaction(transaction, true);

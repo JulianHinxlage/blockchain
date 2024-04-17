@@ -1,3 +1,6 @@
+//
+// Copyright (c) 2024 Julian Hinxlage. All rights reserved.
+//
 
 #include "blockchain/Node.h"
 #include "blockchain/KeyStore.h"
@@ -8,11 +11,11 @@ public:
 	KeyStore keyStore;
 	std::map<Hash, Transaction> pendingTransactions;
 	std::thread* thread;
-	std::mutex mutex;
-	std::condition_variable cv;
 	std::atomic_bool running;
+	bool createEmptyBlocks = true;
 
 	~Validator();
 	void init(const std::string& chainDir, const std::string& keyFile, const std::string& entryNodeFile);
-	void createBlock();
+	void epoch();
+	void createBlock(uint32_t slot, uint64_t slotBeginTime);
 };

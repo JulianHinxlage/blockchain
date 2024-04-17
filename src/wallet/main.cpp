@@ -97,19 +97,34 @@ int main(int argc, char* argv[]) {
 			break;
 		}
 		else if (cmd == "info") {
-			wallet.node.blockChain.accountTree.reset(wallet.node.blockChain.getBlockHeader(wallet.node.blockChain.getLatestBlock()).accountTreeRoot);
+			wallet.node.blockChain.accountTree.reset(wallet.node.blockChain.getBlockHeader(wallet.node.blockChain.getHeadBlock()).accountTreeRoot);
 			EccPublicKey address = wallet.keyStore.getPublicKey();
 			Account account = wallet.node.blockChain.accountTree.get(address);
 
 			printf("block count:  %i\n", wallet.node.blockChain.getBlockCount());
-			printf("chain tip:    %s\n", toHex(wallet.node.blockChain.getLatestBlock()).c_str());
+			printf("chain tip:    %s\n", toHex(wallet.node.blockChain.getHeadBlock()).c_str());
 			printf("address:      %s\n", toHex(address).c_str());
 			printf("balance:      %s\n", amountToCoin(account.balance).c_str());
+			if (account.stakeAmount != 0) {
+				printf("stake:        %s\n", amountToCoin(account.stakeAmount).c_str());
+				printf("stake block:  %llu\n", account.stakeBlockNumber);
+				printf("validator num:%llu\n", account.validatorNumber);
+				printf("stake owner:  %s\n", toHex(account.stakeOwner).c_str());
+			}
 			printf("transactions: %u\n", account.transactionCount);
 		}
 		else if (cmd == "blocks") {
+
+			int showCount = 5;
+			if (args.size() > 0) {
+				try {
+					showCount = std::stoi(args[0]);
+				}
+				catch (...) {}
+			}
+
 			int count = wallet.node.blockChain.getBlockCount();
-			for (int i = std::max(0, count - 5); i < count; i++) {
+			for (int i = std::max(0, count - showCount); i < count; i++) {
 				Hash hash = wallet.node.blockChain.getBlockHash(i);
 				Block block = wallet.node.blockChain.getBlock(hash);
 
@@ -117,14 +132,20 @@ int main(int argc, char* argv[]) {
 					printf("\n");
 				}
 				printf("block number:      %i\n", i);
-				printf("block hash:        %s\n", toHex(hash).c_str());
-				printf("account tree:      %s\n", toHex(block.header.accountTreeRoot).c_str());
+				printf("block slot:        %i\n", block.header.slot);
 				printf("transaction count: %i\n", block.header.transactionCount);
+				printf("total stake amount %s\n", amountToCoin(block.header.totalStakeAmount).c_str());
+				printf("block hash:        %s\n", toHex(hash).c_str());
+				printf("block seed:        %s\n", toHex(block.header.seed).c_str());
+				printf("block validator:   %s\n", toHex(block.header.validator).c_str());
+				printf("block beneficiary: %s\n", toHex(block.header.beneficiary).c_str());
+				printf("account tree:      %s\n", toHex(block.header.accountTreeRoot).c_str());
+				printf("validator tree:    %s\n", toHex(block.header.validatorTreeRoot).c_str());
 			}
 		}
 		else if (cmd == "send") {
 			if (args.size() < 2) {
-				printf("usage: send <address> <amount> [fee]");
+				printf("usage: send <address> <amount> [fee] [type]");
 			}
 			else {
 				std::string address = args[0];
@@ -133,22 +154,74 @@ int main(int argc, char* argv[]) {
 				if (args.size() > 2) {
 					fee = args[2];
 				}
+				TransactionType type = TransactionType::TRANSFER;
+				if (args.size() > 3) {
+					std::string str = args[3];
+					if (str == "transfer") {
+						type = TransactionType::TRANSFER;
+					}else if (str == "stake") {
+						type = TransactionType::STAKE;
+					}
+					else if (str == "unstake") {
+						type = TransactionType::UNSTAKE;
+					}
+					else {
+						printf("invalid type");
+						continue;
+					}
+				}
 
-				wallet.sendTransaction(address, amount, fee);
+				wallet.sendTransaction(address, amount, fee, type);
 			}
 		}
 		else if (cmd == "test") {
 			wallet.sendTransaction(toHex(wallet.keyStore.getPublicKey()), "0", "0");
 		}
 		else if (cmd == "sync") {
-			wallet.node.blockChain.accountTree.reset(wallet.node.blockChain.getBlockHeader(wallet.node.blockChain.getLatestBlock()).accountTreeRoot);
+			wallet.node.blockChain.accountTree.reset(wallet.node.blockChain.getBlockHeader(wallet.node.blockChain.getHeadBlock()).accountTreeRoot);
 			wallet.node.synchronize();
 		}
 		else if (cmd == "verify") {
 			wallet.node.verifyChain();
 		}
 		else if (cmd == "reset") {
-			wallet.node.blockChain.resetTip(wallet.node.blockChain.getBlockHash(0));
+			wallet.node.blockChain.setHeadBlock(wallet.node.blockChain.getBlockHash(0));
+		}
+		else if (cmd == "stats") {
+			int count = wallet.node.blockChain.getBlockCount();
+			int start = std::max(1, count - 100);
+
+			std::map<int, int> slotCount;
+			std::map<EccPublicKey, int> validatorCount;
+			int slotSum = 0;
+			int slotSumCount = 0;
+			int statsCount = 0;
+
+			for (int i = start; i < count; i++) {
+				Hash hash = wallet.node.blockChain.getBlockHash(i);
+				Block block = wallet.node.blockChain.getBlock(hash);
+
+				if (block.header.slot < 10) {
+					slotSum += block.header.slot;
+					slotSumCount++;
+				}
+				slotCount[block.header.slot]++;
+				validatorCount[block.header.validator]++;
+				statsCount++;
+			}
+
+			uint32_t beginTime = wallet.node.blockChain.getBlock(wallet.node.blockChain.getBlockHash(start)).header.timestamp;
+			uint32_t endTime = wallet.node.blockChain.getBlock(wallet.node.blockChain.getBlockHash(count-1)).header.timestamp;
+
+			printf("statistics for the last %i blocks\n", count - start);
+			printf("avg slot num:   %f\n", (float)slotSum / (float)slotSumCount);
+			printf("avg block time: %f\n", (float)(endTime - beginTime) / (float)statsCount);
+			for (auto& i : slotCount) {
+				printf("slot %i occured %i times\n", i.first, i.second);
+			}
+			for (auto& i : validatorCount) {
+				printf("validator %s occured %i times\n", toHex(i.first).c_str(), i.second);
+			}
 		}
 		else {
 			printf("invalid command\n");

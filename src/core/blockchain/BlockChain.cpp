@@ -7,20 +7,26 @@
 
 void BlockChain::init(const std::string& directory) {
 	this->directory = directory;
+	consensus.blockChain = this;
 	accountTreeStorage.init(directory + "/accounts");
 	accountTree.storage = &accountTreeStorage;
 	accountTree.init(directory + "/accounts");
 	config.initDevNet(accountTree);
 	blockStorage.init(directory + "/blocks");
 	transactionStorage.init(directory + "/transactions");
-	
+	stakeTreeStorage.init(directory + "/stake");
+	validatorTree.storage = &stakeTreeStorage;
+
 	loadBlockList();
-	if (blockList.empty()) {
+	if (!hasBlock(config.genesisBlockHash)) {
 		addBlock(config.genesisBlock);
-		addBlockToTip(config.genesisBlockHash);
+	}
+	if (blockList.empty()) {
+		setHeadBlock(config.genesisBlockHash);
 	}
 
-	accountTree.reset(getBlock(latestBlock).header.accountTreeRoot);
+	accountTree.reset(getBlock(getHeadBlock()).header.accountTreeRoot);
+	validatorTree.reset(getBlock(getHeadBlock()).header.validatorTreeRoot);
 }
 
 TransactionHeader BlockChain::getTransactionHeader(const Hash& hash) {
@@ -69,73 +75,62 @@ void BlockChain::addTransaction(const Transaction& transaction) {
 	}
 }
 
-bool BlockChain::resetTip(const Hash& blockHash) {
-	if (blockHash == Hash(0)) {
-		blockList.clear();
-		blockCount = 0;
-		latestBlock = Hash(0);
-		addBlock(config.genesisBlock);
-		addBlockToTip(config.genesisBlockHash);
-		accountTree.reset(getBlock(latestBlock).header.accountTreeRoot);
+bool BlockChain::setHeadBlock(const Hash& blockHash) {
+	uint64_t commonBlockNumber = 0;
+	std::vector<Hash> newChain;
+
+	if (blockHash == config.genesisBlockHash) {
+		blockList.resize(0);
+		blockList.push_back(config.genesisBlockHash);
+		saveBlockList();
 		return true;
 	}
 
-	int blockNumber = getBlockHeader(blockHash).blockNumber;
-
-	if (blockList.size() <= blockNumber) {
-		return false;
-	}
-	if (blockList[blockNumber] != blockHash) {
-		return false;
-	}
-
-	blockList.resize(blockNumber+1);
-	blockCount = blockList.size();
-	if (blockList.size() > 0) {
-		latestBlock = blockList.back();
-	}
-	else {
-		latestBlock = Hash(0);
-	}
-	saveBlockList();
-	accountTree.reset(getBlock(latestBlock).header.accountTreeRoot);
-	return true;
-}
-
-bool BlockChain::addBlockToTip(const Hash& blockHash, bool check) {
-	if (check) {
-		if (blockStorage.has(blockHash)) {
-			Block block = getBlock(blockHash);
-			if (block.header.previousBlockHash != latestBlock) {
-				return false;
+	Hash current = blockHash;
+	while (true) {
+		if (hasBlock(current)) {
+			BlockHeader block = getBlockHeader(current);
+			if (block.blockNumber < getBlockCount()) {
+				if (getBlockHash(block.blockNumber) == current) {
+					commonBlockNumber = block.blockNumber;
+					break;
+				}
 			}
+			newChain.push_back(current);
+			current = block.previousBlockHash;
 		}
 		else {
 			return false;
 		}
 	}
 
-	blockList.push_back(blockHash);
-	latestBlock = blockHash;
-	blockCount++;
+	if (newChain.size() == 0 && commonBlockNumber + 1 == getBlockCount()) {
+		return false;
+	}
+
+	blockList.resize(commonBlockNumber + 1 - blockListStartOffset);
+	for (int i = newChain.size() - 1; i >= 0; i--) {
+		blockList.push_back(newChain[i]);
+	}
+
 	saveBlockList();
 	return true;
 }
 
-Hash BlockChain::getLatestBlock() {
-	return latestBlock;
+Hash BlockChain::getHeadBlock() {
+	if (blockList.size() == 0) {
+		return Hash(0);
+	}
+	return blockList[blockList.size() - 1];
 }
 
 int BlockChain::getBlockCount() {
-	return blockCount;
+	return blockListStartOffset + blockList.size();
 }
 
 Hash BlockChain::getBlockHash(int blockNumber) {
-	if (blockNumber < blockCount) {
-		int offset = blockCount - blockList.size();
-		if (blockNumber >= offset) {
-			return blockList[blockNumber - offset];
-		}
+	if (blockNumber >= 0 && blockNumber < getBlockCount()) {
+		return blockList[blockNumber - blockListStartOffset];
 	}
 	return Hash(0);
 }
@@ -143,18 +138,11 @@ Hash BlockChain::getBlockHash(int blockNumber) {
 void BlockChain::loadBlockList() {
 	std::ifstream stream(directory + "/chain.dat");
 	blockList.clear();
-	blockCount = 0;
+	blockListStartOffset = 0;
 	if (stream.is_open()) {
 		std::string line;
 		while (std::getline(stream, line)) {
 			blockList.push_back(fromHex<Hash>(line));
-		}
-		blockCount = blockList.size();
-		if (!blockList.empty()) {
-			latestBlock = blockList.back();
-		}
-		else {
-			latestBlock = Hash(0);
 		}
 	}
 }

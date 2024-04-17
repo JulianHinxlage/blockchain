@@ -13,11 +13,15 @@ public:
 	uint32_t transactionCount = 0;
 	uint64_t timestamp = 0;
 	uint64_t blockNumber = 0;
+	Amount totalStakeAmount = 0;
 	Hash previousBlockHash = 0;
 	EccPublicKey validator = 0;
 	EccPublicKey beneficiary = 0;
+	uint32_t slot = 0;
+	Hash seed = 0;
 	Hash transactionTreeRoot = 0;
 	Hash accountTreeRoot = 0;
+	Hash validatorTreeRoot = 0;
 	EccSignature signature = 0;
 
 	Hash caclulateHash() const;

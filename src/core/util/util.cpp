@@ -1,3 +1,6 @@
+//
+// Copyright (c) 2024 Julian Hinxlage. All rights reserved.
+//
 
 #include "util.h"
 

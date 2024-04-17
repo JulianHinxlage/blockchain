@@ -96,7 +96,13 @@ void Node::verifyChain() {
 
 	if (maxValidBlock != blockChain.getBlockCount() - 1) {
 		log(LogLevel::INFO, "Node", "cut chain to %i block", maxValidBlock + 1);
-		blockChain.resetTip(blockChain.getBlockHash(maxValidBlock));
+
+		if (maxValidBlock == -1) {
+			blockChain.setHeadBlock(blockChain.config.genesisBlockHash);
+		}
+		else {
+			blockChain.setHeadBlock(blockChain.getBlockHash(maxValidBlock));
+		}
 	}
 	log(LogLevel::INFO, "Node", "finished verifying blockchain");
 }
@@ -193,7 +199,7 @@ bool Node::prepareBlock(const Block& block, bool onlyCheck) {
 
 bool Node::verifyBlock(const Block& block) {
 	std::unique_lock<std::mutex> lock(verifyMutex);
-	BlockError error = verifier.verifyBlock(block);
+	BlockError error = verifier.verifyBlock(block, time(nullptr));
 	if (error != BlockError::VALID) {
 		log(LogLevel::DEBUG, "Node", "invalid block %s: %s", toHex(block.blockHash).c_str(), blockErrorToString(error));
 		return false;
@@ -212,27 +218,10 @@ void Node::onVerifiedBlock(const Block& block) {
 }
 
 bool Node::checkForTip(const Block& block) {
-	if (block.header.blockNumber == blockChain.getBlockCount()) {
-		if (blockChain.addBlockToTip(block.blockHash, false)) {
-			return true;
-		}
-	}
-	else if (block.header.blockNumber == blockChain.getBlockCount() - 1) {
-		if (block.blockHash < blockChain.getLatestBlock()) {
-			blockChain.resetTip(blockChain.getBlockHash(block.header.blockNumber - 1));
-			if (blockChain.addBlockToTip(block.blockHash)) {
-				return true;
-			}
-		}
-	}
-	else if (block.header.blockNumber >= blockChain.getBlockCount() - 1) {
-		checkForTip(blockChain.getBlock(block.header.previousBlockHash));
-		if (block.header.blockNumber == blockChain.getBlockCount()) {
-			blockChain.resetTip(blockChain.getBlockHash(block.header.blockNumber - 1));
-			if (blockChain.addBlockToTip(block.blockHash)) {
-				return true;
-			}
-		}
+	BlockHeader head = blockChain.getBlock(blockChain.getHeadBlock()).header;
+	if (blockChain.consensus.forkChoice(head, block.header)) {
+		blockChain.setHeadBlock(block.blockHash);
+		return true;
 	}
 	return false;
 }

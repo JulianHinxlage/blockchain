@@ -7,12 +7,12 @@
 #include "storage/KeyValueStorage.h"
 #include "BinaryTreeNode.h"
 
-template<typename KeyType, typename ValueType>
+template<typename KeyType, typename ValueType, bool useSerial>
 class BinaryTree {
 public:
 	KeyValueStorage* storage;
 
-	typedef BinaryTreeNode<KeyType, ValueType> Node;
+	typedef BinaryTreeNode<KeyType, ValueType, useSerial> Node;
 	typedef BinaryTreeNodeType Type;
 
 	void init(const std::string& directory, const Hash &root = Hash()) {

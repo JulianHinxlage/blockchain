@@ -84,6 +84,11 @@ void Serializer::readStr(std::string& str) {
 	readBytes((uint8_t*)str.data(), size);
 }
 
+std::string Serializer::readAll() {
+	std::string str((char*)&dataPtr[readIndex], (size_t)(dataSize - readIndex));
+	readIndex += str.size();
+	return str;
+}
 
 uint8_t *Serializer::data() {
 	return dataPtr;

@@ -1,3 +1,7 @@
+//
+// Copyright (c) 2024 Julian Hinxlage. All rights reserved.
+//
+
 #pragma once
 
 #include <vector>

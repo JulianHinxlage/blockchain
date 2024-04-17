@@ -1,3 +1,6 @@
+//
+// Copyright (c) 2024 Julian Hinxlage. All rights reserved.
+//
 
 #include "blockchain/Node.h"
 #include "blockchain/KeyStore.h"
@@ -8,5 +11,5 @@ public:
 	KeyStore keyStore;
 
 	void init(const std::string &chainDir, const std::string& keyFile, const std::string& entryNodeFile);
-	void sendTransaction(const std::string& address, const std::string& amount, const std::string& fee);
+	void sendTransaction(const std::string& address, const std::string& amount, const std::string& fee, TransactionType type = TransactionType::TRANSFER);
 };

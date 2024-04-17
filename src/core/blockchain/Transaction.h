@@ -10,9 +10,18 @@
 #include <vector>
 #include <string>
 
+enum class TransactionType : uint32_t {
+	TRANSFER,
+	STAKE,
+	UNSTAKE,
+	CREATE,
+	EXECUTE,
+};
+
 class TransactionHeader {
 public:
 	uint32_t version = 0;
+	TransactionType type = TransactionType::TRANSFER;
 	uint32_t transactionNumber = 0;
 	uint64_t timestamp = 0;
 	EccPublicKey sender = 0;

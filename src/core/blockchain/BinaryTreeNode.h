@@ -59,10 +59,10 @@ public:
 	}
 };
 
-template<typename KeyType, typename ValueType>
+template<typename KeyType, typename ValueType, bool useSerial>
 class BinaryTreeNode {
 public:
-	typedef BinaryTreeNode<KeyType, ValueType> Node;
+	typedef BinaryTreeNode<KeyType, ValueType, useSerial> Node;
 	typedef BinaryTreeKey<KeyType> Key;
 	typedef BinaryTreeNodeType Type;
 
@@ -99,7 +99,13 @@ public:
 		}
 		else if (type == BinaryTreeNodeType::LEAF) {
 			serial.write(path);
-			serial.write(value);
+			if constexpr (useSerial) {
+				std::string str = value.serial();
+				serial.writeBytes((uint8_t*)str.data(), str.size());
+			}
+			else {
+				serial.write(value);
+			}
 		}
 		return serial.toString();
 	}
@@ -118,7 +124,12 @@ public:
 		}
 		else if (type == BinaryTreeNodeType::LEAF) {
 			serial.read(path);
-			serial.read(value);
+			if constexpr (useSerial) {
+				value.deserial(serial.readAll());
+			}
+			else {
+				serial.read(value);
+			}
 		}
 		return serial.getReadIndex();
 	}

@@ -17,11 +17,15 @@ void BlockHeader::sign(const EccPrivateKey& privateKey) {
 	serial.write(transactionCount);
 	serial.write(timestamp);
 	serial.write(blockNumber);
+	serial.write(totalStakeAmount);
 	serial.write(previousBlockHash);
 	serial.write(validator);
 	serial.write(beneficiary);
+	serial.write(slot);
+	serial.write(seed);
 	serial.write(transactionTreeRoot);
 	serial.write(accountTreeRoot);
+	serial.write(validatorTreeRoot);
 	std::string data = serial.toString();
 	signature = eccCreateSignature(data.data(), data.size(), privateKey);
 }
@@ -32,11 +36,15 @@ bool BlockHeader::verifySignature() const {
 	serial.write(transactionCount);
 	serial.write(timestamp);
 	serial.write(blockNumber);
+	serial.write(totalStakeAmount);
 	serial.write(previousBlockHash);
 	serial.write(validator);
 	serial.write(beneficiary);
+	serial.write(slot);
+	serial.write(seed);
 	serial.write(transactionTreeRoot);
 	serial.write(accountTreeRoot);
+	serial.write(validatorTreeRoot);
 	std::string data = serial.toString();
 	return eccVerifySignature(data.data(), data.size(), validator, signature);
 }
@@ -47,11 +55,15 @@ std::string BlockHeader::serial() const {
 	serial.write(transactionCount);
 	serial.write(timestamp);
 	serial.write(blockNumber);
+	serial.write(totalStakeAmount);
 	serial.write(previousBlockHash);
 	serial.write(validator);
 	serial.write(beneficiary);
+	serial.write(slot);
+	serial.write(seed);
 	serial.write(transactionTreeRoot);
 	serial.write(accountTreeRoot);
+	serial.write(validatorTreeRoot);
 	serial.write(signature);
 	return serial.toString();
 }
@@ -62,11 +74,15 @@ int BlockHeader::deserial(const std::string& str) {
 	serial.read(transactionCount);
 	serial.read(timestamp);
 	serial.read(blockNumber);
+	serial.read(totalStakeAmount);
 	serial.read(previousBlockHash);
 	serial.read(validator);
 	serial.read(beneficiary);
+	serial.read(slot);
+	serial.read(seed);
 	serial.read(transactionTreeRoot);
 	serial.read(accountTreeRoot);
+	serial.read(validatorTreeRoot);
 	serial.read(signature);
 	return serial.getReadIndex();
 }
@@ -94,7 +110,6 @@ Hash TransactionTree::calculateRoot() const {
 
 std::string Block::serial() const {
 	Serializer serial(header.serial());
-	serial.write((int)transactionTree.transactionHashes.size());
 	serial.writeBytes((uint8_t*)transactionTree.transactionHashes.data(), transactionTree.transactionHashes.size() * sizeof(Hash));
 	return serial.toString();
 }
@@ -102,8 +117,8 @@ std::string Block::serial() const {
 int Block::deserial(const std::string& str) {
 	Serializer serial(str);
 	serial.skip(header.deserial(str));
-	int size = serial.read<int>();
-	transactionTree.transactionHashes.resize(size);
+	int size = serial.size() - serial.getReadIndex();;
+	transactionTree.transactionHashes.resize(size / sizeof(Hash));
 	serial.readBytes((uint8_t*)transactionTree.transactionHashes.data(), transactionTree.transactionHashes.size() * sizeof(Hash));
 	return serial.getReadIndex();
 }
