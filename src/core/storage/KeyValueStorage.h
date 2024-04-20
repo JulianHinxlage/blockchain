@@ -9,6 +9,7 @@
 #include <fstream>
 #include <memory>
 #include <vector>
+#include <mutex>
 
 class KeyValueStorage {
 public:
@@ -72,6 +73,7 @@ private:
 	std::unordered_map<std::string, std::string> cache;
 	std::vector<std::shared_ptr<std::ifstream>> streams;
 	std::ofstream writeStream;
+	std::mutex mutex;
 	int writeStreamId = 0;
 	int maxFileSize = 0;
 };

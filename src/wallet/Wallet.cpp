@@ -16,13 +16,23 @@ void Wallet::init(const std::string& chainDir, const std::string& keyFile, const
 	node.verifyChain();
 	node.synchronize();
 	log(LogLevel::DEBUG, "Wallet", "chain head: num=%i %s", node.blockChain.getBlockCount() - 1, toHex(node.blockChain.getHeadBlock()).c_str());
+
+	initContext = false;
 }
 
 void Wallet::sendTransaction(const std::string &address, const std::string& amount, const std::string& fee, TransactionType type) {
-	Transaction transaction = node.creator.createTransaction(keyStore.getPublicKey(), fromHex<EccPublicKey>(address), coinToAmount(amount), coinToAmount(fee), type);
+	if (!initContext) {
+		initContext = true;
+		context = node.verifier.createContext(node.blockChain.getHeadBlock());
+	}
+	
+	uint32_t transactionNumber = context.accountTree.get(keyStore.getPublicKey()).transactionCount;
+	//uint32_t transactionNumber = node.blockChain.getAccountTree().get(keyStore.getPublicKey()).transactionCount;
+
+	Transaction transaction = node.creator.createTransaction(keyStore.getPublicKey(), fromHex<EccPublicKey>(address), transactionNumber, coinToAmount(amount), coinToAmount(fee), type);
 	transaction.header.sign(keyStore.getPrivateKey());
 	transaction.transactionHash = transaction.header.caclulateHash();
-	TransactionError error = node.verifier.verifyTransaction(transaction, true);
+	TransactionError error = node.verifier.verifyTransaction(transaction, context);
 	if (error != TransactionError::VALID) {
 		log(LogLevel::INFO, "Wallet", "invalid transaction %s: %s", toHex(transaction.transactionHash).c_str(), transactionErrorToString(error));
 	}

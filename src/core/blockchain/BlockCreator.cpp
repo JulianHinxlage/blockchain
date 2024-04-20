@@ -16,85 +16,89 @@ void BlockCreator::beginBlock(const EccPublicKey& validator, uint32_t slot, uint
 	block.header.beneficiary = validator;
 	block.header.slot = slot;
 	block.header.seed = sha256((char*)&prev.seed, sizeof(prev.seed));
-	blockChain->accountTree.reset(prev.accountTreeRoot);
-	blockChain->validatorTree.reset(prev.validatorTreeRoot);
+	totalFees = 0;
+
+	accountTree = blockChain->getAccountTree(prev.accountTreeRoot);
+	validatorTree = blockChain->getValidatorTree(prev.validatorTreeRoot);
 }
 
 void BlockCreator::addTransaction(const Transaction& transaction) {
 	block.transactionTree.transactionHashes.push_back(transaction.transactionHash);
 
 	if (transaction.header.type == TransactionType::TRANSFER) {
-		Account sender = blockChain->accountTree.get(transaction.header.sender);
+		Account sender = accountTree.get(transaction.header.sender);
 		sender.balance -= transaction.header.amount;
 		sender.balance -= transaction.header.fee;
 		sender.transactionCount++;
-		blockChain->accountTree.set(transaction.header.sender, sender);
+		accountTree.set(transaction.header.sender, sender);
 	
-		Account recipient = blockChain->accountTree.get(transaction.header.recipient);
+		Account recipient = accountTree.get(transaction.header.recipient);
 		recipient.balance += transaction.header.amount;
-		blockChain->accountTree.set(transaction.header.recipient, recipient);
+		accountTree.set(transaction.header.recipient, recipient);
 	}
 	else if (transaction.header.type == TransactionType::STAKE) {
-		Account sender = blockChain->accountTree.get(transaction.header.sender);
+		Account sender = accountTree.get(transaction.header.sender);
 		sender.balance -= transaction.header.amount + transaction.header.fee;
 		sender.transactionCount++;
-		blockChain->accountTree.set(transaction.header.sender, sender);
+		accountTree.set(transaction.header.sender, sender);
 
-		Account recipient = blockChain->accountTree.get(transaction.header.recipient);
+		Account recipient = accountTree.get(transaction.header.recipient);
 		if (recipient.stakeAmount == 0) {
 			recipient.stakeBlockNumber = block.header.blockNumber;
 			recipient.validatorNumber = block.header.totalStakeAmount / blockChain->config.minimumStakeAmount;
-			blockChain->validatorTree.set(recipient.validatorNumber, transaction.header.recipient);
+			validatorTree.set(recipient.validatorNumber, transaction.header.recipient);
 		}
 		recipient.stakeAmount += transaction.header.amount;
 		recipient.stakeOwner = transaction.header.sender;
-		blockChain->accountTree.set(transaction.header.recipient, recipient);
+		accountTree.set(transaction.header.recipient, recipient);
 
 		block.header.totalStakeAmount += transaction.header.amount;
 	}
 	else if (transaction.header.type == TransactionType::UNSTAKE) {
-		Account sender = blockChain->accountTree.get(transaction.header.sender);
+		Account sender = accountTree.get(transaction.header.sender);
 		sender.balance += transaction.header.amount;
 		sender.balance -= transaction.header.fee;
 		sender.transactionCount++;
-		blockChain->accountTree.set(transaction.header.sender, sender);
+		accountTree.set(transaction.header.sender, sender);
 
-		Account recipient = blockChain->accountTree.get(transaction.header.recipient);
+		Account recipient = accountTree.get(transaction.header.recipient);
 		recipient.stakeAmount -= transaction.header.amount;
 		if (recipient.stakeAmount == 0) {
 			recipient.stakeOwner = EccPublicKey(0);
 			recipient.stakeBlockNumber = 0;
 
-			EccPublicKey lastAddress = blockChain->validatorTree.get((block.header.totalStakeAmount / blockChain->config.minimumStakeAmount) - 1);
-			Account lastAccount = blockChain->accountTree.get(lastAddress);
-			blockChain->validatorTree.set(recipient.validatorNumber, lastAddress);
-			blockChain->validatorTree.set(lastAccount.validatorNumber, EccPublicKey(0));
+			EccPublicKey lastAddress = validatorTree.get((block.header.totalStakeAmount / blockChain->config.minimumStakeAmount) - 1);
+			Account lastAccount = accountTree.get(lastAddress);
+			validatorTree.set(recipient.validatorNumber, lastAddress);
+			validatorTree.set(lastAccount.validatorNumber, EccPublicKey(0));
 			lastAccount.validatorNumber = recipient.validatorNumber;
-			blockChain->accountTree.set(lastAddress, lastAccount);
+			accountTree.set(lastAddress, lastAccount);
 
 			recipient.validatorNumber = 0;
 		}
-		blockChain->accountTree.set(transaction.header.recipient, recipient);
+		accountTree.set(transaction.header.recipient, recipient);
 
 		block.header.totalStakeAmount -= transaction.header.amount;
 	}
 
-	Account beneficiary = blockChain->accountTree.get(block.header.beneficiary);
-	beneficiary.balance += transaction.header.fee;
-	blockChain->accountTree.set(block.header.beneficiary, beneficiary);
-
+	totalFees += transaction.header.fee;
 	blockChain->addTransaction(transaction);
 }
 
 Block& BlockCreator::endBlock() {
+	Account beneficiary = accountTree.get(block.header.beneficiary);
+	beneficiary.balance += totalFees;
+	accountTree.set(block.header.beneficiary, beneficiary);
+	totalFees = 0;
+
 	block.header.transactionCount = block.transactionTree.transactionHashes.size();
 	block.header.transactionTreeRoot = block.transactionTree.calculateRoot();
-	block.header.accountTreeRoot = blockChain->accountTree.getRoot();
-	block.header.validatorTreeRoot = blockChain->validatorTree.getRoot();
+	block.header.accountTreeRoot = accountTree.getRoot();
+	block.header.validatorTreeRoot = validatorTree.getRoot();
 	return block;
 }
 
-Transaction BlockCreator::createTransaction(const EccPublicKey& sender, const EccPublicKey& recipient, Amount amount, uint64_t fee, TransactionType type) {
+Transaction BlockCreator::createTransaction(const EccPublicKey& sender, const EccPublicKey& recipient, uint32_t transactionNumber, Amount amount, Amount fee, TransactionType type) {
 	Transaction tx;
 	tx.header.version = blockChain->config.transactionVersion;
 	tx.header.type = type;
@@ -104,6 +108,6 @@ Transaction BlockCreator::createTransaction(const EccPublicKey& sender, const Ec
 	tx.header.recipient = recipient;
 	tx.header.amount = amount;
 	tx.header.fee = fee;
-	tx.header.transactionNumber = blockChain->accountTree.get(sender).transactionCount;
+	tx.header.transactionNumber = transactionNumber;
 	return tx;
 }

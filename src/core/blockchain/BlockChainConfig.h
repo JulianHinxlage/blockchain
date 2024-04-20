@@ -19,6 +19,7 @@ public:
 	Hash genesisBlockHash;
 	Block genesisBlock;
 	int slotTime;
+	int maxTransactionPerBlock;
 
 	void initDevNet(AccountTree &accountTree) {
 		transactionVersion = 1;
@@ -27,6 +28,7 @@ public:
 		stakeMaturityBlockCount = 10;
 		uniformStakeSize = true;
 		slotTime = 10;
+		maxTransactionPerBlock = 1000;
 
 		EccPublicKey genesisAddress = fromHex<EccPublicKey>("");
 		Account genesisAccount;

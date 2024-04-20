@@ -277,15 +277,14 @@ void Network::onMessage(const std::string& msg, PeerId source) {
 		else if (opcode == NetworkOpcode::ACCOUNT_REQUEST) {
 			Hash treeRoot = request.read<Hash>();
 			EccPublicKey address = request.read<EccPublicKey>();
-			if (blockChain->accountTree.reset(treeRoot)) {
-				Account account = blockChain->accountTree.get(address);
-				Serializer reply;
-				reply.write(NetworkOpcode::ACCOUNT_REPLY);
-				reply.write(requestId);
-				reply.write(account);
-				network.send(source, reply.toString());
-				return;
-			}
+
+			Account account = blockChain->getAccountTree(treeRoot).get(address);
+			Serializer reply;
+			reply.write(NetworkOpcode::ACCOUNT_REPLY);
+			reply.write(requestId);
+			reply.write(account);
+			network.send(source, reply.toString());
+			return;
 		}
 		else if (opcode == NetworkOpcode::BLOCK_BROADCAST) {
 			std::string data;

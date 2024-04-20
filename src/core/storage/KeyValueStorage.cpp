@@ -35,6 +35,7 @@ void write(std::ofstream& stream, const T &t) {
 }
 
 bool KeyValueStorage::init(const std::string& directory, int keySize, int valueSize) {
+	std::unique_lock<std::mutex> lock(mutex);
 	this->directory = directory;
 	maxFileSize = 1024 * 1024 * 1024;
 	std::filesystem::create_directories(directory);
@@ -75,6 +76,7 @@ bool KeyValueStorage::init(const std::string& directory, int keySize, int valueS
 }
 
 bool KeyValueStorage::has(const std::string& key) {
+	std::unique_lock<std::mutex> lock(mutex);
 	if (cache.find(key) != cache.end()) {
 		return true;
 	}
@@ -82,6 +84,7 @@ bool KeyValueStorage::has(const std::string& key) {
 }
 
 std::string KeyValueStorage::get(const std::string& key) {
+	std::unique_lock<std::mutex> lock(mutex);
 	auto i = cache.find(key);
 	if (i != cache.end()) {
 		return i->second;
@@ -115,6 +118,7 @@ std::string KeyValueStorage::get(const std::string& key) {
 }
 
 void KeyValueStorage::set(const std::string& key, const std::string& value) {
+	std::unique_lock<std::mutex> lock(mutex);
 	Index::Entry entry;
 	entry.offset = writeStream.tellp();
 	while (entry.offset == -1) {
@@ -150,6 +154,7 @@ void KeyValueStorage::set(const std::string& key, const std::string& value) {
 }
 
 void KeyValueStorage::remove(const std::string& key) {
+	std::unique_lock<std::mutex> lock(mutex);
 	cache.erase(key);
 	index.remove(key);
 }

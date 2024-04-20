@@ -97,9 +97,8 @@ int main(int argc, char* argv[]) {
 			break;
 		}
 		else if (cmd == "info") {
-			wallet.node.blockChain.accountTree.reset(wallet.node.blockChain.getBlockHeader(wallet.node.blockChain.getHeadBlock()).accountTreeRoot);
 			EccPublicKey address = wallet.keyStore.getPublicKey();
-			Account account = wallet.node.blockChain.accountTree.get(address);
+			Account account = wallet.node.blockChain.getAccountTree().get(address);
 
 			printf("block count:  %i\n", wallet.node.blockChain.getBlockCount());
 			printf("chain tip:    %s\n", toHex(wallet.node.blockChain.getHeadBlock()).c_str());
@@ -143,6 +142,32 @@ int main(int argc, char* argv[]) {
 				printf("validator tree:    %s\n", toHex(block.header.validatorTreeRoot).c_str());
 			}
 		}
+		else if (cmd == "transactions") {
+			int count = wallet.node.blockChain.getBlockCount();
+			for (int i = 0; i < count; i++) {
+				Hash hash = wallet.node.blockChain.getBlockHash(i);
+				Block block = wallet.node.blockChain.getBlock(hash);
+				for (auto& txHash : block.transactionTree.transactionHashes) {
+					Transaction tx = wallet.node.blockChain.getTransaction(txHash);
+
+					bool isSender = tx.header.sender == wallet.keyStore.getPublicKey();
+					bool isRecipient = tx.header.recipient == wallet.keyStore.getPublicKey();
+					if (isSender || isRecipient) {
+						printf("\n");
+						printf("tx number:      %i\n", (int)tx.header.transactionNumber);
+						printf("block number:   %i\n", (int)block.header.blockNumber);
+						printf("type:           %i\n", (int)tx.header.type);
+						printf("amount:         %s\n", amountToCoin(tx.header.amount).c_str());
+						if (isSender) {
+							printf("-> to:      %s\n", toHex(tx.header.recipient).c_str());
+						}
+						if (isRecipient) {
+							printf("<- from:    %s\n", toHex(tx.header.sender).c_str());
+						}
+					}
+				}
+			}
+		}
 		else if (cmd == "send") {
 			if (args.size() < 2) {
 				printf("usage: send <address> <amount> [fee] [type]");
@@ -177,8 +202,13 @@ int main(int argc, char* argv[]) {
 		else if (cmd == "test") {
 			wallet.sendTransaction(toHex(wallet.keyStore.getPublicKey()), "0", "0");
 		}
+		else if (cmd == "test2") {
+			while (true) {
+				wallet.sendTransaction(toHex(wallet.keyStore.getPublicKey()), "0", "0.001");
+				std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			}
+		}
 		else if (cmd == "sync") {
-			wallet.node.blockChain.accountTree.reset(wallet.node.blockChain.getBlockHeader(wallet.node.blockChain.getHeadBlock()).accountTreeRoot);
 			wallet.node.synchronize();
 		}
 		else if (cmd == "verify") {

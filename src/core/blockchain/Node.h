@@ -8,6 +8,7 @@
 #include "blockchain/Network.h"
 #include "blockchain/BlockCreator.h"
 #include "blockchain/BlockVerifier.h"
+#include "BlockFetcher.h"
 
 enum class NetworkMode {
 	CLIENT,
@@ -29,6 +30,14 @@ enum class StorageMode {
 	FULL,
 };
 
+enum NodeState {
+	INIT,
+	RUNNING,
+	VERIFY_CHAIN,
+	SYNCHRONISING_FETCH,
+	SYNCHRONISING_VERIFY,
+};
+
 class Node {
 public:
 	std::function<void(const Block&)> onBlockRecived;
@@ -46,20 +55,14 @@ public:
 	void init(const std::string& chainDir, const std::string& entryNodeFile);
 	void synchronize();
 	void verifyChain();
+	NodeState getState();
 
 private:
-	std::map<Hash, Block> pendingBlocks;
-	std::map<Hash, Hash> blockByPrev;
-	std::map<Hash, Hash> blockByTrasnaction;
-	std::mutex verifyMutex;
+	NodeState state;
+	BlockFetcher fetcher;
+	ThreadedQueue<Block> verifyQueue;
+	std::map<Hash, Hash> pendingVerifies;
 	bool synchronisationPending = false;
 
-
-	void onBlock(const Block& block);
-	void onTransaction(const Transaction& transaction);
-
-	bool prepareBlock(const Block& block, bool onlyCheck = false);
-	bool verifyBlock(const Block& block);
-	void onVerifiedBlock(const Block& block);
-	bool checkForTip(const Block& block);
+	void verify(const Block& block);
 };

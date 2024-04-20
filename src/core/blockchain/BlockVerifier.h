@@ -6,38 +6,6 @@
 
 #include "BlockChain.h"
 
-enum class BlockError {
-	VALID,
-	INVALID_VERSION,
-	INVALID_TRANSACTION_COUNT,
-	INVALID_TRANSACTION_ROOT,
-	INVALID_PUBLIC_KEY,
-	INVALID_SIGNATURE,
-	PREVIOUS_BLOCK_NOT_FOUND,
-	INVALID_BLOCK_NUMBER,
-	INVALID_VALIDATOR,
-	INVALID_TIMESTAMP,
-	INVALID_FUTURE_BLOCK,
-	INVALID_SEED,
-	TRANSACTION_NOT_FOUND,
-	INVALID_TRANSACTION,
-	INVALID_ACCOUNT_TREE_ROOT,
-	INVALID_STAKE_TREE_ROOT,
-	INVALID_TOTAL_STAKE_AMOUNT,
-};
-
-enum class TransactionError {
-	VALID,
-	INVALID_VERSION,
-	INVALID_TYPE,
-	INVALID_PUBLIC_KEY,
-	INVALID_SIGNATURE,
-	INVALID_BALANCE,
-	INVALID_TRANSACTION_NUMBER,
-	INVALID_STAKE_AMOUNT,
-	INVALID_STAKE_OWNER,
-};
-
 const char* blockErrorToString(BlockError error);
 const char* transactionErrorToString(TransactionError error);
 
@@ -46,13 +14,24 @@ public:
 	EccPublicKey beneficiary;
 	uint64_t blockNumber;
 	uint64_t totalStakeAmount;
+	Amount totalFees;
+	AccountTree accountTree;
+	ValidatorTree validatorTree;
 };
 
 class BlockVerifier {
 public:
 	BlockChain *blockChain;
 
+	//created verification context b ased on a block
+	//transactions might be valid in on block and invalid in another
+	VerifyContext createContext(const Hash& blockHash);
+
+	//verifies a block header, note that it is assumed that the previous block is valid
 	BlockError verifyBlockHeader(const BlockHeader& block, uint64_t unixTime);
+
+	//verifies a block including all transactions, note that it is assumed that the previous block is valid
 	BlockError verifyBlock(const Block& block, uint64_t unixTime);
-	TransactionError verifyTransaction(const Transaction& transaction, bool updateAccounts = false, VerifyContext *context = nullptr);
+	TransactionError verifyTransaction(const Transaction& transaction);
+	TransactionError verifyTransaction(const Transaction& transaction, VerifyContext &context);
 };

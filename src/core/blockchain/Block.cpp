@@ -117,8 +117,9 @@ std::string Block::serial() const {
 int Block::deserial(const std::string& str) {
 	Serializer serial(str);
 	serial.skip(header.deserial(str));
-	int size = serial.size() - serial.getReadIndex();;
+	int size = serial.size() - serial.getReadIndex();
 	transactionTree.transactionHashes.resize(size / sizeof(Hash));
 	serial.readBytes((uint8_t*)transactionTree.transactionHashes.data(), transactionTree.transactionHashes.size() * sizeof(Hash));
 	return serial.getReadIndex();
 }
+

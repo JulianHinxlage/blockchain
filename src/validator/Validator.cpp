@@ -27,16 +27,23 @@ void Validator::init(const std::string& chainDir, const std::string& keyFile, co
 	node.verifyMode = VerifyMode::FULL_VERIFY;
 
 	node.onTransactionRecived = [&](const Transaction& transaction) {
+		node.blockChain.addPendingTransaction(transaction.transactionHash);
 		pendingTransactions[transaction.transactionHash] = transaction;
 	};
 	node.onBlockRecived = [&](const Block& block) {
 		for (auto& hash : block.transactionTree.transactionHashes) {
 			pendingTransactions.erase(hash);
+			node.blockChain.removePendingTransaction(hash);
 		}
 	};
 
 	node.init(chainDir, entryNodeFile);
 	keyStore.loadOrCreate(keyFile);
+
+	for (auto& p : node.blockChain.getPendingTransactions()) {
+		pendingTransactions[p] = node.blockChain.getTransaction(p);
+	}
+
 	node.verifyChain();
 	node.synchronize();
 	log(LogLevel::DEBUG, "Validator", "chain head: num=%i %s", node.blockChain.getBlockCount() - 1, toHex(node.blockChain.getHeadBlock()).c_str());
@@ -44,7 +51,12 @@ void Validator::init(const std::string& chainDir, const std::string& keyFile, co
 	running = true;
 	thread = new std::thread([&]() {
 		while (running) {
-			epoch();
+			if (node.getState() != NodeState::RUNNING) {
+				std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+			}
+			else {
+				epoch();
+			}
 		}
 	});
 }
@@ -81,8 +93,8 @@ void Validator::epoch() {
 		startSlot = timePastInEpochMilli / 1000 / slotTime;
 	}
 
-
 	log(LogLevel::INFO, "Validator", "begin epoch %i", number);
+	log(LogLevel::INFO, "Validator", "pending transaction count: %i", (int)pendingTransactions.size());
 
 	for (int slot = startSlot;; slot++) {
 		uint64_t slotBeginTime = epochBeginTime + slot * slotTime;
@@ -112,15 +124,9 @@ void Validator::epoch() {
 		bool slotWasSuccessfull = false;
 		bool creadedBlock = false;
 		for (int i = timePastInSlotMillis / 1000; i < slotTime; i++) {
-
-			if (!running) {
-				return;
-			}
-
-			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
-			if (!running) {
-				return;
+			if (!creadedBlock && (validator == keyStore.getPublicKey() || validator == EccPublicKey(0))) {
+				createBlock(slot, slotBeginTime);
+				creadedBlock = true;
 			}
 
 			if (node.blockChain.getBlockCount() > number) {
@@ -128,9 +134,14 @@ void Validator::epoch() {
 				break;
 			}
 
-			if (!creadedBlock && (validator == keyStore.getPublicKey() || validator == EccPublicKey(0))) {
-				createBlock(slot, slotBeginTime);
-				creadedBlock = true;
+			if (!running) {
+				return;
+			}
+
+			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+		
+			if (!running) {
+				return;
 			}
 		}
 
@@ -149,6 +160,10 @@ void Validator::createBlock(uint32_t slot, uint64_t slotBeginTime) {
 
 	node.creator.beginBlock(keyStore.getPublicKey(), slot, timestamp);
 
+	VerifyContext context = node.verifier.createContext(node.blockChain.getHeadBlock());
+	uint64_t startTime = nowMilli();
+	int transactionCount = 0;
+
 	std::set<int> numbers;
 	for (auto& i : pendingTransactions) {
 		numbers.insert(i.second.header.transactionNumber);
@@ -158,14 +173,33 @@ void Validator::createBlock(uint32_t slot, uint64_t slotBeginTime) {
 		for (auto& i : pendingTransactions) {
 			auto& transaction = i.second;
 			if (i.second.header.transactionNumber == number) {
-				TransactionError error = node.verifier.verifyTransaction(transaction);
+				VerifyContext tmp = context;
+				TransactionError error = node.verifier.verifyTransaction(transaction, context);
 				if (error == TransactionError::VALID) {
 					node.creator.addTransaction(transaction);
+					transactionCount++;
 				}
 				else {
 					log(LogLevel::INFO, "Validator", "invalid transaction %s: %s", toHex(transaction.transactionHash).c_str(), transactionErrorToString(error));
+					context = tmp;
+				}
+
+				if (transactionCount >= node.blockChain.config.maxTransactionPerBlock) {
+					break;
+				}
+
+				if (nowMilli() - startTime > 2000) {
+					break;
 				}
 			}
+		}
+
+		if (transactionCount >= node.blockChain.config.maxTransactionPerBlock) {
+			break;
+		}
+
+		if (nowMilli() - startTime > 2000) {
+			break;
 		}
 	}
 
@@ -180,7 +214,12 @@ void Validator::createBlock(uint32_t slot, uint64_t slotBeginTime) {
 	BlockError error = node.verifier.verifyBlock(block, time(nullptr));
 	if (error == BlockError::VALID) {
 		node.blockChain.addBlock(block);
-		log(LogLevel::INFO, "Validator", "created block num=%i slot=%i %s", block.header.blockNumber, block.header.slot, toHex(block.blockHash).c_str());
+		BlockMetaData meta;
+		meta.received = time(nullptr);
+		meta.lastCheck = error;
+		node.blockChain.setMetaData(block.blockHash, meta);
+
+		log(LogLevel::INFO, "Validator", "created block num=%i slot=%i txCount=%i hash=%s", block.header.blockNumber, block.header.slot, block.header.transactionCount, toHex(block.blockHash).c_str());
 		
 		if (block.header.previousBlockHash == node.blockChain.getHeadBlock()) {
 			node.blockChain.setHeadBlock(block.blockHash);
@@ -189,6 +228,7 @@ void Validator::createBlock(uint32_t slot, uint64_t slotBeginTime) {
 		
 		for (auto& hash : block.transactionTree.transactionHashes) {
 			pendingTransactions.erase(hash);
+			node.blockChain.removePendingTransaction(hash);
 		}
 	}
 	else {

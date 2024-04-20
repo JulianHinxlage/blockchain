@@ -23,10 +23,13 @@ void Node::init(const std::string& chainDir, const std::string& entryNodeFile) {
 	}
 
 	network.onBlockRecived = [&](const Block& block) {
-		onBlock(block);
+		fetcher.onBlockIn(block);
 	};
 	network.onTransactionRecived = [&](const Transaction& transaction) {
-		onTransaction(transaction);
+		blockChain.addTransaction(transaction);
+		if (onTransactionRecived) {
+			onTransactionRecived(transaction);
+		}
 	};
 	network.onStateChanged = [&](NetworkState state) {
 		if (state == NetworkState::CONNECTED) {
@@ -37,6 +40,75 @@ void Node::init(const std::string& chainDir, const std::string& entryNodeFile) {
 	};
 
 	network.connect("127.0.0.1", 54000);
+
+	fetcher.blockChain = &blockChain;
+	fetcher.network = &network;
+	fetcher.onBlockOut = [&](const Block &block) {
+		verifyQueue.onInput(block);
+	};
+	verifyQueue.onOutput = [&](const Block& block) {
+		verify(block);
+	};
+	verifyQueue.start();
+	fetcher.start();
+	state = NodeState::INIT;
+}
+
+void Node::verify(const Block& block) {
+	BlockError result = BlockError::NOT_CHECKED;;
+	BlockMetaData prevMeta = blockChain.getMetaData(block.header.previousBlockHash);
+	if (prevMeta.lastCheck == BlockError::NOT_CHECKED) {
+		if (blockChain.hasBlock(block.header.previousBlockHash)) {
+			pendingVerifies[block.header.previousBlockHash] = block.blockHash;
+			verifyQueue.onInput(blockChain.getBlock(block.header.previousBlockHash));
+			return;
+		}
+		else {
+			fetcher.onBlockIn(block);
+			return;
+		}
+	}
+	else if (prevMeta.lastCheck != BlockError::VALID) {
+		result = BlockError::INVALID_PREVIOUS;
+	}
+	else {
+		result = verifier.verifyBlock(block, time(nullptr));
+	}
+
+	BlockMetaData meta = blockChain.getMetaData(block.blockHash);
+	meta.lastCheck = result;
+	blockChain.setMetaData(block.blockHash, meta);
+
+	if (result == BlockError::VALID) {
+		BlockHeader head = blockChain.getBlockHeader(blockChain.getHeadBlock());
+		if (blockChain.consensus.forkChoice(head, block.header)) {
+			blockChain.setHeadBlock(block.blockHash);
+			log(LogLevel::INFO, "Node", "new cain head num=%i tx=%i slot=%i hash=%s", block.header.blockNumber, block.header.transactionCount, block.header.slot, toHex(block.blockHash).c_str());
+			if (onBlockRecived) {
+				onBlockRecived(block);
+			}
+		}
+		else {
+			log(LogLevel::INFO, "Node", "valid block num=%i tx=%i slot=%i hash=%s", block.header.blockNumber, block.header.transactionCount, block.header.slot, toHex(block.blockHash).c_str());
+		}
+	}
+	else {
+		log(LogLevel::INFO, "Node", "invalid block error=%s num=%i slot=%i hash=%s", blockErrorToString(result), block.header.blockNumber, block.header.slot, toHex(block.blockHash).c_str());
+	}
+
+	auto i = pendingVerifies.find(block.blockHash);
+	if (i != pendingVerifies.end()) {
+		Hash hash = i->second;
+		pendingVerifies.erase(i);
+		verifyQueue.onInput(blockChain.getBlock(hash));
+	}
+
+	if (state == SYNCHRONISING_VERIFY) {
+		if (verifyQueue.empty()) {
+			state = NodeState::RUNNING;
+			log(LogLevel::INFO, "Node", "chain synchronisation finished");
+		}
+	}
 }
 
 void Node::synchronize() {
@@ -45,36 +117,23 @@ void Node::synchronize() {
 		return;
 	}
 	synchronisationPending = false;
+	state = NodeState::SYNCHRONISING_FETCH;
+	log(LogLevel::INFO, "Node", "chain synchronisation started");
 
-	network.getBlockHashes(-1, -1, [&](int begin, int end, const std::vector<Hash>& hashes, PeerId peer) {
-		if (hashes.size() != end - begin) {
-			return;
-		}
-
-		std::vector<Hash> request;
-		for (int i = 0; i < hashes.size(); i++) {
-			Hash hash = hashes[i];
-
-			if (blockChain.hasBlock(hash)) {
-				prepareBlock(blockChain.getBlock(hash));
-				continue;
-			}
-
-			request.push_back(hash);
-
-			if (request.size() == 100 || i == hashes.size() - 1) {
-				network.getBlocks(request, [&](const std::vector<Block>& blocks, PeerId peer) {
-					for (const Block &block : blocks) {
-						onBlock(block);
-					}
-				}, peer);
-				request.clear();
+	fetcher.onSynchronized = [&]() {
+		if (state == NodeState::SYNCHRONISING_FETCH) {
+			state = NodeState::SYNCHRONISING_VERIFY;
+			if (verifyQueue.empty()) {
+				state = NodeState::RUNNING;
+				log(LogLevel::INFO, "Node", "chain synchronisation finished");
 			}
 		}
-	});
+	};
+	fetcher.synchronize();
 }
 
 void Node::verifyChain() {
+	state = NodeState::VERIFY_CHAIN;
 	log(LogLevel::INFO, "Node", "start verifying blockchain");
 	int count = blockChain.getBlockCount();
 	int maxValidBlock = -1;
@@ -87,15 +146,24 @@ void Node::verifyChain() {
 			break;
 		}
 
-		if (!verifyBlock(block)) {
+		BlockError result = verifier.verifyBlock(block, time(nullptr));
+		if (result != BlockError::VALID) {
+			log(LogLevel::INFO, "Node", "invalid block error=%s num=%i slot=%i hash=%s", blockErrorToString(result), block.header.blockNumber, block.header.slot, toHex(block.blockHash).c_str());
 			break;
 		}
 
 		maxValidBlock = i;
 	}
 
-	if (maxValidBlock != blockChain.getBlockCount() - 1) {
+	if (maxValidBlock != count - 1) {
 		log(LogLevel::INFO, "Node", "cut chain to %i block", maxValidBlock + 1);
+
+		for (int i = maxValidBlock + 1; i < blockChain.getBlockCount(); i++) {
+			Hash hash = blockChain.getBlockHash(i);
+			BlockMetaData meta = blockChain.getMetaData(hash);
+			meta.lastCheck = BlockError::INVALID_PREVIOUS;
+			blockChain.setMetaData(hash, meta);
+		}
 
 		if (maxValidBlock == -1) {
 			blockChain.setHeadBlock(blockChain.config.genesisBlockHash);
@@ -105,123 +173,9 @@ void Node::verifyChain() {
 		}
 	}
 	log(LogLevel::INFO, "Node", "finished verifying blockchain");
+	state = NodeState::INIT;
 }
 
-void Node::onBlock(const Block& block) {
-	log(LogLevel::DEBUG, "Node", "received block: num=%i %s", (int)block.header.blockNumber, toHex(block.blockHash).c_str());
-	if (verifyMode == VerifyMode::FULL_VERIFY) {
-		prepareBlock(block);
-	}
-	else {
-		onVerifiedBlock(block);
-	}
-}
-
-void Node::onTransaction(const Transaction& transaction) {
-	log(LogLevel::DEBUG, "Node", "received transaction: %s", toHex(transaction.transactionHash).c_str());
-	blockChain.addTransaction(transaction);
-
-	auto i = blockByTrasnaction.find(transaction.transactionHash);
-	if (i != blockByTrasnaction.end()) {
-		auto j = pendingBlocks.find(i->second);
-		if (j != pendingBlocks.end()) {
-			if (prepareBlock(j->second, true)) {
-				pendingBlocks.erase(i->second);
-				blockByTrasnaction.erase(transaction.transactionHash);
-			}
-			return;
-		}
-	}
-
-	log(LogLevel::INFO, "Node", "new transaction: %s", toHex(transaction.transactionHash).c_str());
-	if (onTransactionRecived) {
-		onTransactionRecived(transaction);
-	}
-}
-
-bool Node::prepareBlock(const Block& block, bool onlyCheck) {
-	bool isPrepared = true;
-	Hash prev = block.header.previousBlockHash;
-	if (prev != Hash(0) && !blockChain.hasBlock(prev)) {
-		isPrepared = false;
-		if (!onlyCheck) {
-			if (!blockByPrev.contains(prev) && !pendingBlocks.contains(prev)) {
-				blockByPrev[prev] = block.blockHash;
-				network.getBlocks({prev}, [&](const std::vector<Block>& blocks, PeerId peer) {
-					if (blocks.size() == 1) {
-						onBlock(blocks[0]);
-					}
-				});
-			}
-		}
-	}
-	for (auto& hash : block.transactionTree.transactionHashes) {
-		if (!blockChain.hasTransaction(hash)) {
-			isPrepared = false;
-			if (!onlyCheck) {
-				if (!blockByTrasnaction.contains(hash)) {
-					blockByTrasnaction[hash] = block.blockHash;
-					network.getTransactions({ hash }, [&](const std::vector<Transaction>& transactions, PeerId peer) {
-						if (transactions.size() == 1) {
-							onTransaction(transactions[0]);
-						}
-					});
-				}
-			}
-		}
-	}
-
-	if (!isPrepared) {
-		if (!onlyCheck) {
-			pendingBlocks[block.blockHash] = block;
-		}
-		return false;
-	}
-	else {
-		if (verifyBlock(block)) {
-			onVerifiedBlock(block);
-
-			auto i = blockByPrev.find(block.blockHash);
-			if (i != blockByPrev.end()) {
-				auto j = pendingBlocks.find(i->second);
-				if (j != pendingBlocks.end()) {
-					if (prepareBlock(j->second, true)) {
-						pendingBlocks.erase(i->second);
-						blockByPrev.erase(block.blockHash);
-					}
-				}
-			}
-
-		}
-		return true;
-	}
-}
-
-bool Node::verifyBlock(const Block& block) {
-	std::unique_lock<std::mutex> lock(verifyMutex);
-	BlockError error = verifier.verifyBlock(block, time(nullptr));
-	if (error != BlockError::VALID) {
-		log(LogLevel::DEBUG, "Node", "invalid block %s: %s", toHex(block.blockHash).c_str(), blockErrorToString(error));
-		return false;
-	}
-	return true;
-}
-
-void Node::onVerifiedBlock(const Block& block) {
-	blockChain.addBlock(block);
-	if (checkForTip(block)) {
-		log(LogLevel::INFO, "Node", "new block: num=%i %s", (int)block.header.blockNumber, toHex(block.blockHash).c_str());
-		if (onBlockRecived) {
-			onBlockRecived(block);
-		}
-	}
-}
-
-bool Node::checkForTip(const Block& block) {
-	BlockHeader head = blockChain.getBlock(blockChain.getHeadBlock()).header;
-	if (blockChain.consensus.forkChoice(head, block.header)) {
-		blockChain.setHeadBlock(block.blockHash);
-		return true;
-	}
-	return false;
+NodeState Node::getState() {
+	return state;
 }

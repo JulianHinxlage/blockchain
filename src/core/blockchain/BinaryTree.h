@@ -10,12 +10,12 @@
 template<typename KeyType, typename ValueType, bool useSerial>
 class BinaryTree {
 public:
-	KeyValueStorage* storage;
-
 	typedef BinaryTreeNode<KeyType, ValueType, useSerial> Node;
+	typedef BinaryTree<KeyType, ValueType, useSerial> Tree;
 	typedef BinaryTreeNodeType Type;
 
-	void init(const std::string& directory, const Hash &root = Hash()) {
+	void init(KeyValueStorage* storage, const Hash &root = Hash()) {
+		this->storage = storage;
 		reset(root);
 	}
 
@@ -66,7 +66,21 @@ public:
 		return false;
 	}
 
+	Tree createInstance(const Hash& root) {
+		Tree instance;
+		instance.storage = storage;
+		if (root == rootHash) {
+			instance.rootHash = rootHash;
+			instance.rootNode = rootNode;
+		}
+		else {
+			instance.reset(root);
+		}
+		return instance;
+	}
+
 private:
+	KeyValueStorage* storage;
 	std::shared_ptr<Node> rootNode;
 	Hash rootHash;
 };

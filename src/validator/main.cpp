@@ -95,9 +95,8 @@ int main(int argc, char* argv[]) {
 			break;
 		}
 		else if (cmd == "info") {
-			validator.node.blockChain.accountTree.reset(validator.node.blockChain.getBlockHeader(validator.node.blockChain.getHeadBlock()).accountTreeRoot);
 			EccPublicKey address = validator.keyStore.getPublicKey();
-			Account account = validator.node.blockChain.accountTree.get(address);
+			Account account = validator.node.blockChain.getAccountTree().get(address);
 
 			printf("block count:  %i\n", validator.node.blockChain.getBlockCount());
 			printf("chain tip:    %s\n", toHex(validator.node.blockChain.getHeadBlock()).c_str());

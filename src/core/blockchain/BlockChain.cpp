@@ -9,13 +9,12 @@ void BlockChain::init(const std::string& directory) {
 	this->directory = directory;
 	consensus.blockChain = this;
 	accountTreeStorage.init(directory + "/accounts");
-	accountTree.storage = &accountTreeStorage;
-	accountTree.init(directory + "/accounts");
+	accountTree.init(&accountTreeStorage);
 	config.initDevNet(accountTree);
 	blockStorage.init(directory + "/blocks");
 	transactionStorage.init(directory + "/transactions");
-	stakeTreeStorage.init(directory + "/stake");
-	validatorTree.storage = &stakeTreeStorage;
+	validatorTreeStorage.init(directory + "/validators");
+	validatorTree.init(&validatorTreeStorage);
 
 	loadBlockList();
 	if (!hasBlock(config.genesisBlockHash)) {
@@ -27,6 +26,9 @@ void BlockChain::init(const std::string& directory) {
 
 	accountTree.reset(getBlock(getHeadBlock()).header.accountTreeRoot);
 	validatorTree.reset(getBlock(getHeadBlock()).header.validatorTreeRoot);
+
+	loadMetaData();
+	loadPendingTransactions();
 }
 
 TransactionHeader BlockChain::getTransactionHeader(const Hash& hash) {
@@ -46,7 +48,7 @@ BlockHeader BlockChain::getBlockHeader(const Hash& hash) {
 	return getBlock(hash).header;
 }
 
-Block BlockChain::getBlock(const Hash &hash) {
+Block BlockChain::getBlock(const Hash& hash) {
 	Block block;
 	if (blockStorage.has(hash)) {
 		block.deserial(blockStorage.get(hash));
@@ -73,6 +75,38 @@ void BlockChain::addTransaction(const Transaction& transaction) {
 	if (!transactionStorage.has(transaction.transactionHash)) {
 		transactionStorage.set(transaction.transactionHash, transaction.serial());
 	}
+}
+
+BlockMetaData BlockChain::getMetaData(const Hash& blockHash) {
+	if (blockHash == Hash(0) || blockHash == config.genesisBlockHash) {
+		BlockMetaData data;
+		data.lastCheck = BlockError::VALID;
+		return data;
+	}
+	return metaData[blockHash];
+}
+
+void BlockChain::setMetaData(const Hash& blockHash, BlockMetaData data) {
+	metaData[blockHash] = data;
+	saveMetaData();
+}
+
+void BlockChain::addPendingTransaction(const Hash& transactionHash) {
+	if (!pendingTransactions.contains(transactionHash)) {
+		pendingTransactions.insert(transactionHash);
+		savePendingTransactions();
+	}
+}
+
+void BlockChain::removePendingTransaction(const Hash& transactionHash) {
+	if(pendingTransactions.contains(transactionHash)){
+		pendingTransactions.erase(transactionHash);
+		savePendingTransactions();
+	}
+}
+
+const std::set<Hash>& BlockChain::getPendingTransactions() {
+	return pendingTransactions;
 }
 
 bool BlockChain::setHeadBlock(const Hash& blockHash) {
@@ -135,6 +169,18 @@ Hash BlockChain::getBlockHash(int blockNumber) {
 	return Hash(0);
 }
 
+AccountTree BlockChain::getAccountTree(const Hash& root) {
+	return accountTree.createInstance(root);
+}
+
+AccountTree BlockChain::getAccountTree() {
+	return accountTree.createInstance(getBlock(getHeadBlock()).header.accountTreeRoot);
+}
+
+ValidatorTree BlockChain::getValidatorTree(const Hash& root) {
+	return validatorTree.createInstance(root);
+}
+
 void BlockChain::loadBlockList() {
 	std::ifstream stream(directory + "/chain.dat");
 	blockList.clear();
@@ -154,4 +200,50 @@ void BlockChain::saveBlockList() {
 	}
 	std::ofstream stream(directory + "/chain.dat");
 	stream.write(content.data(), content.size());
+}
+
+void BlockChain::loadMetaData() {
+	metaData.clear();
+	std::ifstream stream(directory + "/meta.dat", std::ios::binary);
+	if (stream.is_open()) {
+		std::string content((std::istreambuf_iterator<char>(stream)), (std::istreambuf_iterator<char>()));
+		Serializer serial(content);
+		while (serial.hasDataLeft()) {
+			Hash hash = serial.read<Hash>();
+			BlockMetaData data = serial.read<BlockMetaData>();
+			metaData[hash] = data;
+		}
+	}
+}
+
+void BlockChain::saveMetaData(){
+	Serializer serial;
+	for (auto& i : metaData) {
+		serial.write(i.first);
+		serial.write(i.second);
+	}
+	std::ofstream stream(directory + "/meta.dat", std::ios::binary);
+	stream.write((char*)serial.data(), serial.size());
+}
+
+void BlockChain::savePendingTransactions() {
+	Serializer serial;
+	for (auto &i : pendingTransactions) {
+		serial.write(i);
+	}
+	std::ofstream stream(directory + "/pending.dat", std::ios::binary);
+	stream.write((char*)serial.data(), serial.size());
+}
+
+void BlockChain::loadPendingTransactions() {
+	pendingTransactions.clear();
+	std::ifstream stream(directory + "/pending.dat", std::ios::binary);
+	if (stream.is_open()) {
+		std::string content((std::istreambuf_iterator<char>(stream)), (std::istreambuf_iterator<char>()));
+		Serializer serial(content);
+		while (serial.hasDataLeft()) {
+			Hash hash = serial.read<Hash>();
+			pendingTransactions.insert(hash);
+		}
+	}
 }

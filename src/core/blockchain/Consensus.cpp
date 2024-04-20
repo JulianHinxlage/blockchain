@@ -22,7 +22,8 @@ EccPublicKey Consensus::selectNextValidator(const BlockHeader& block, uint32_t s
 	if (num >= numMax) {
 		num = numMax - 1;
 	}
-	return blockChain->validatorTree.get(num);
+
+	return blockChain->getValidatorTree(block.validatorTreeRoot).get(num);
 }
 
 bool Consensus::forkChoice(const BlockHeader& a, const BlockHeader& b) {
