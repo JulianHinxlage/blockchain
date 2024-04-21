@@ -15,6 +15,7 @@ void Wallet::init(const std::string& chainDir, const std::string& keyFile, const
 
 	node.verifyChain();
 	node.synchronize();
+	node.synchronizePendingTransactions();
 	log(LogLevel::DEBUG, "Wallet", "chain head: num=%i %s", node.blockChain.getBlockCount() - 1, toHex(node.blockChain.getHeadBlock()).c_str());
 
 	initContext = false;
@@ -27,8 +28,6 @@ void Wallet::sendTransaction(const std::string &address, const std::string& amou
 	}
 	
 	uint32_t transactionNumber = context.accountTree.get(keyStore.getPublicKey()).transactionCount;
-	//uint32_t transactionNumber = node.blockChain.getAccountTree().get(keyStore.getPublicKey()).transactionCount;
-
 	Transaction transaction = node.creator.createTransaction(keyStore.getPublicKey(), fromHex<EccPublicKey>(address), transactionNumber, coinToAmount(amount), coinToAmount(fee), type);
 	transaction.header.sign(keyStore.getPrivateKey());
 	transaction.transactionHash = transaction.header.caclulateHash();
@@ -41,4 +40,9 @@ void Wallet::sendTransaction(const std::string &address, const std::string& amou
 		log(LogLevel::INFO, "Wallet", "created transaction %s", toHex(transaction.transactionHash).c_str());
 		node.network.sendTransaction(transaction);
 	}
+}
+
+Account Wallet::getAccount() {
+	Account account = node.blockChain.getAccountTree().get(keyStore.getPublicKey());
+	return account;
 }

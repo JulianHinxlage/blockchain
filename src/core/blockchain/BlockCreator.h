@@ -9,7 +9,7 @@
 class BlockCreator {
 public:
 	BlockChain* blockChain;
-	void beginBlock(const EccPublicKey &validator, uint32_t slot, uint64_t timestamp);
+	void beginBlock(const EccPublicKey &validator, const EccPublicKey &beneficiary, uint32_t slot, uint64_t timestamp);
 	Block &endBlock();
 	void addTransaction(const Transaction& transaction);
 	Transaction createTransaction(const EccPublicKey& sender, const EccPublicKey& recipient, uint32_t transactionNumber, Amount amount, Amount fee = 0, TransactionType type = TransactionType::TRANSFER);

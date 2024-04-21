@@ -26,26 +26,23 @@ void Validator::init(const std::string& chainDir, const std::string& keyFile, co
 	node.storageMode = StorageMode::FULL;
 	node.verifyMode = VerifyMode::FULL_VERIFY;
 
-	node.onTransactionRecived = [&](const Transaction& transaction) {
+	/*
+	node.onNewTransaction = [&](const Transaction& transaction) {
 		node.blockChain.addPendingTransaction(transaction.transactionHash);
-		pendingTransactions[transaction.transactionHash] = transaction;
 	};
-	node.onBlockRecived = [&](const Block& block) {
+	node.onNewBlock = [&](const Block& block) {
 		for (auto& hash : block.transactionTree.transactionHashes) {
-			pendingTransactions.erase(hash);
 			node.blockChain.removePendingTransaction(hash);
 		}
 	};
+	*/
 
 	node.init(chainDir, entryNodeFile);
 	keyStore.loadOrCreate(keyFile);
 
-	for (auto& p : node.blockChain.getPendingTransactions()) {
-		pendingTransactions[p] = node.blockChain.getTransaction(p);
-	}
-
 	node.verifyChain();
 	node.synchronize();
+	node.synchronizePendingTransactions();
 	log(LogLevel::DEBUG, "Validator", "chain head: num=%i %s", node.blockChain.getBlockCount() - 1, toHex(node.blockChain.getHeadBlock()).c_str());
 
 	running = true;
@@ -69,7 +66,7 @@ void Validator::epoch() {
 	uint64_t number = node.blockChain.getBlockCount();
 	uint64_t slotTime = node.blockChain.config.slotTime;
 
-	while (number == 1 && pendingTransactions.size() == 0) {
+	while (number == 1 && node.blockChain.getPendingTransactions().size() == 0) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 		number = node.blockChain.getBlockCount();
 	}
@@ -85,6 +82,7 @@ void Validator::epoch() {
 		timePastInEpochMilli = (nowMilli() - epochBeginTime * 1000);
 		startSlot = timePastInEpochMilli / 1000 / slotTime;
 	}
+	
 
 	if (timePastInEpochMilli < 0) {
 		log(LogLevel::INFO, "Validator", "wait for epoch %i to begin", number);
@@ -94,7 +92,8 @@ void Validator::epoch() {
 	}
 
 	log(LogLevel::INFO, "Validator", "begin epoch %i", number);
-	log(LogLevel::INFO, "Validator", "pending transaction count: %i", (int)pendingTransactions.size());
+
+
 
 	for (int slot = startSlot;; slot++) {
 		uint64_t slotBeginTime = epochBeginTime + slot * slotTime;
@@ -116,6 +115,7 @@ void Validator::epoch() {
 
 		EccPublicKey validator = node.blockChain.consensus.selectNextValidator(prev.header, slot);
 		log(LogLevel::INFO, "Validator", "begin slot %i for epoch %i", slot, number);
+		log(LogLevel::INFO, "Validator", "pending transaction count: %i", (int)node.blockChain.getPendingTransactions().size());
 		log(LogLevel::INFO, "Validator", "for slot %i validator %s was selected", slot, toHex(validator).c_str());
 		if (validator == keyStore.getPublicKey() || validator == EccPublicKey(0)) {
 			log(LogLevel::INFO, "Validator", "###### local key selected as validator for block %i slot %i ######", number, slot);
@@ -150,6 +150,12 @@ void Validator::epoch() {
 			break;
 		}
 	}
+
+	for (auto& hash : invalidPendingTransactions) {
+		node.blockChain.removePendingTransaction(hash);
+	}
+	invalidPendingTransactions.clear();
+
 }
 
 void Validator::createBlock(uint32_t slot, uint64_t slotBeginTime) {
@@ -158,21 +164,27 @@ void Validator::createBlock(uint32_t slot, uint64_t slotBeginTime) {
 	timestamp = std::max(slotBeginTime, timestamp);
 	timestamp = std::min(slotBeginTime + node.blockChain.config.slotTime - 1, timestamp);
 
-	node.creator.beginBlock(keyStore.getPublicKey(), slot, timestamp);
+	if (beneficiary == EccPublicKey(0)) {
+		node.creator.beginBlock(keyStore.getPublicKey(), keyStore.getPublicKey(), slot, timestamp);
+	}
+	else {
+		node.creator.beginBlock(keyStore.getPublicKey(), beneficiary, slot, timestamp);
+	}
 
 	VerifyContext context = node.verifier.createContext(node.blockChain.getHeadBlock());
 	uint64_t startTime = nowMilli();
 	int transactionCount = 0;
 
 	std::set<int> numbers;
-	for (auto& i : pendingTransactions) {
-		numbers.insert(i.second.header.transactionNumber);
+	for (auto& i : node.blockChain.getPendingTransactions()) {
+		Transaction transaction = node.blockChain.getTransaction(i);
+		numbers.insert(transaction.header.transactionNumber);
 	}
 
 	for (auto& number : numbers) {
-		for (auto& i : pendingTransactions) {
-			auto& transaction = i.second;
-			if (i.second.header.transactionNumber == number) {
+		for (auto& i : node.blockChain.getPendingTransactions()) {
+			Transaction transaction = node.blockChain.getTransaction(i);
+			if (transaction.header.transactionNumber == number) {
 				VerifyContext tmp = context;
 				TransactionError error = node.verifier.verifyTransaction(transaction, context);
 				if (error == TransactionError::VALID) {
@@ -182,9 +194,10 @@ void Validator::createBlock(uint32_t slot, uint64_t slotBeginTime) {
 				else {
 					log(LogLevel::INFO, "Validator", "invalid transaction %s: %s", toHex(transaction.transactionHash).c_str(), transactionErrorToString(error));
 					context = tmp;
+					checkPendingTransaction(transaction, error);
 				}
 
-				if (transactionCount >= node.blockChain.config.maxTransactionPerBlock) {
+				if (transactionCount >= maxTrasnactionCount) {
 					break;
 				}
 
@@ -194,7 +207,7 @@ void Validator::createBlock(uint32_t slot, uint64_t slotBeginTime) {
 			}
 		}
 
-		if (transactionCount >= node.blockChain.config.maxTransactionPerBlock) {
+		if (transactionCount >= maxTrasnactionCount) {
 			break;
 		}
 
@@ -221,17 +234,32 @@ void Validator::createBlock(uint32_t slot, uint64_t slotBeginTime) {
 
 		log(LogLevel::INFO, "Validator", "created block num=%i slot=%i txCount=%i hash=%s", block.header.blockNumber, block.header.slot, block.header.transactionCount, toHex(block.blockHash).c_str());
 		
+		for (auto& hash : block.transactionTree.transactionHashes) {
+			node.blockChain.removePendingTransaction(hash);
+		}
 		if (block.header.previousBlockHash == node.blockChain.getHeadBlock()) {
 			node.blockChain.setHeadBlock(block.blockHash);
 		}
 		node.network.sendBlock(block);
 		
-		for (auto& hash : block.transactionTree.transactionHashes) {
-			pendingTransactions.erase(hash);
-			node.blockChain.removePendingTransaction(hash);
-		}
 	}
 	else {
 		log(LogLevel::INFO, "Validator", "invalid block %s: %s", toHex(block.blockHash).c_str(), blockErrorToString(error));
+	}
+}
+
+void Validator::checkPendingTransaction(const Transaction& transaction, TransactionError result) {
+	bool keep = false;
+	if (result == TransactionError::INVALID_TRANSACTION_NUMBER) {
+		uint32_t transactionCount = node.blockChain.getAccountTree().get(transaction.header.sender).transactionCount;
+		if (transaction.header.transactionNumber >= transactionCount) {
+			keep = true;
+		}
+	}
+	if (result == TransactionError::INVALID_BALANCE) {
+		keep = true;
+	}
+	if (!keep) {
+		invalidPendingTransactions.push_back(transaction.transactionHash);
 	}
 }

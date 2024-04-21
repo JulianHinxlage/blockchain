@@ -9,13 +9,16 @@ class Validator {
 public:
 	Node node;
 	KeyStore keyStore;
-	std::map<Hash, Transaction> pendingTransactions;
 	std::thread* thread;
 	std::atomic_bool running;
 	bool createEmptyBlocks = true;
+	int maxTrasnactionCount = 10;
+	EccPublicKey beneficiary;
+	std::vector<Hash> invalidPendingTransactions;
 
 	~Validator();
 	void init(const std::string& chainDir, const std::string& keyFile, const std::string& entryNodeFile);
 	void epoch();
 	void createBlock(uint32_t slot, uint64_t slotBeginTime);
+	void checkPendingTransaction(const Transaction &transaction, TransactionError result);
 };

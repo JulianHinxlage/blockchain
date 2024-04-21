@@ -21,6 +21,8 @@ enum class NetworkOpcode {
 	TRANSACTION_REPLY,
 	ACCOUNT_REQUEST,
 	ACCOUNT_REPLY,
+	PENDING_TRANSACTIONS_REQUEST,
+	PENDING_TRANSACTIONS_REPLY,
 	BLOCK_BROADCAST,
 	TRANSACTION_BROADCAST,
 	REQUEST_ERROR,
@@ -77,6 +79,7 @@ public:
 	void getBlocks(const std::vector<Hash> &blockHashes, const std::function<void(const std::vector<Block>&, PeerId)>& callback, PeerId peer = PeerId(0));
 	void getTransactions(const std::vector<Hash>& transactionHashs, const std::function<void(const std::vector<Transaction>&, PeerId)>& callback, PeerId peer = PeerId(0));
 	void getAccount(Hash treeRoot, EccPublicKey address, const std::function<void(const Account&, PeerId)>& callback, PeerId peer = PeerId(0));
+	void getPendingTransactions(const std::function<void(const std::vector<Hash>&, PeerId)>& callback, PeerId peer = PeerId(0));
 
 private:
 	NetworkState state = NetworkState::UNKNOWN;

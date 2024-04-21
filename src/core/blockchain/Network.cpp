@@ -286,6 +286,20 @@ void Network::onMessage(const std::string& msg, PeerId source) {
 			network.send(source, reply.toString());
 			return;
 		}
+		else if (opcode == NetworkOpcode::PENDING_TRANSACTIONS_REQUEST) {
+			int count = blockChain->getPendingTransactions().size();
+			Serializer reply;
+			reply.write(NetworkOpcode::PENDING_TRANSACTIONS_REPLY);
+			reply.write(requestId);
+			reply.write(count);
+
+			for (auto& i : blockChain->getPendingTransactions()) {
+				reply.write(i);
+			}
+
+			network.send(source, reply.toString());
+			return;
+		}
 		else if (opcode == NetworkOpcode::BLOCK_BROADCAST) {
 			std::string data;
 			request.readStr(data);
@@ -461,6 +475,37 @@ void Network::getAccount(Hash treeRoot, EccPublicKey address, const std::functio
 		Account account;
 		if (callback) {
 			callback(account, peer);
+		}
+	});
+	network.send(peer, request.toString());
+}
+
+void Network::getPendingTransactions(const std::function<void(const std::vector<Hash>&, PeerId)>& callback, PeerId peer) {
+	if (peer == PeerId(0)) {
+		peer = network.getRandomNeighbor();
+	}
+	Serializer request;
+	RequestId requestId = random<RequestId>();
+	request.write(NetworkOpcode::PENDING_TRANSACTIONS_REQUEST);
+	request.write(requestId);
+	requestContext.add(requestId, [callback, peer](NetworkOpcode opcode, Serializer& request) {
+		if (opcode == NetworkOpcode::PENDING_TRANSACTIONS_REPLY) {
+			int count = request.read<int>();
+
+			if (count >= 0) {
+				std::vector<Hash> hashes;
+				for (int i = 0; i < count; i++) {
+					hashes.push_back(request.read<Hash>());
+				}
+				if (callback) {
+					callback(hashes, peer);
+				}
+				return;
+			}
+		}
+		std::vector<Hash> hashes;
+		if (callback) {
+			callback(hashes, peer);
 		}
 	});
 	network.send(peer, request.toString());

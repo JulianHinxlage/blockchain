@@ -2,7 +2,7 @@
 // Copyright (c) 2024 Julian Hinxlage. All rights reserved.
 //
 
-#include "Validator.h"
+#include "validator/Validator.h"
 #include "util/log.h"
 #include "util/util.h"
 

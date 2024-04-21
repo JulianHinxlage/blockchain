@@ -2,7 +2,7 @@
 // Copyright (c) 2024 Julian Hinxlage. All rights reserved.
 //
 
-#include "Wallet.h"
+#include "wallet/Wallet.h"
 #include "util/util.h"
 #include "util/log.h"
 
@@ -98,19 +98,19 @@ int main(int argc, char* argv[]) {
 		}
 		else if (cmd == "info") {
 			EccPublicKey address = wallet.keyStore.getPublicKey();
-			Account account = wallet.node.blockChain.getAccountTree().get(address);
+			Account account = wallet.getAccount();
 
-			printf("block count:  %i\n", wallet.node.blockChain.getBlockCount());
-			printf("chain tip:    %s\n", toHex(wallet.node.blockChain.getHeadBlock()).c_str());
-			printf("address:      %s\n", toHex(address).c_str());
-			printf("balance:      %s\n", amountToCoin(account.balance).c_str());
+			printf("block count:   %i\n", wallet.node.blockChain.getBlockCount());
+			printf("chain tip:     %s\n", toHex(wallet.node.blockChain.getHeadBlock()).c_str());
+			printf("address:       %s\n", toHex(address).c_str());
+			printf("balance:       %s\n", amountToCoin(account.balance).c_str());
 			if (account.stakeAmount != 0) {
-				printf("stake:        %s\n", amountToCoin(account.stakeAmount).c_str());
-				printf("stake block:  %llu\n", account.stakeBlockNumber);
-				printf("validator num:%llu\n", account.validatorNumber);
-				printf("stake owner:  %s\n", toHex(account.stakeOwner).c_str());
+				printf("stake:         %s\n", amountToCoin(account.stakeAmount).c_str());
+				printf("stake block:   %llu\n", account.stakeBlockNumber);
+				printf("validator num: %llu\n", account.validatorNumber);
+				printf("stake owner:   %s\n", toHex(account.stakeOwner).c_str());
 			}
-			printf("transactions: %u\n", account.transactionCount);
+			printf("transactions:  %u\n", account.transactionCount);
 		}
 		else if (cmd == "blocks") {
 
@@ -130,16 +130,16 @@ int main(int argc, char* argv[]) {
 				if (i != 0) {
 					printf("\n");
 				}
-				printf("block number:      %i\n", i);
-				printf("block slot:        %i\n", block.header.slot);
-				printf("transaction count: %i\n", block.header.transactionCount);
-				printf("total stake amount %s\n", amountToCoin(block.header.totalStakeAmount).c_str());
-				printf("block hash:        %s\n", toHex(hash).c_str());
-				printf("block seed:        %s\n", toHex(block.header.seed).c_str());
-				printf("block validator:   %s\n", toHex(block.header.validator).c_str());
-				printf("block beneficiary: %s\n", toHex(block.header.beneficiary).c_str());
-				printf("account tree:      %s\n", toHex(block.header.accountTreeRoot).c_str());
-				printf("validator tree:    %s\n", toHex(block.header.validatorTreeRoot).c_str());
+				printf("block number:       %i\n", i);
+				printf("block slot:         %i\n", block.header.slot);
+				printf("transaction count:  %i\n", block.header.transactionCount);
+				printf("total stake amount: %s\n", amountToCoin(block.header.totalStakeAmount).c_str());
+				printf("block hash:         %s\n", toHex(hash).c_str());
+				printf("block seed:         %s\n", toHex(block.header.seed).c_str());
+				printf("block validator:    %s\n", toHex(block.header.validator).c_str());
+				printf("block beneficiary:  %s\n", toHex(block.header.beneficiary).c_str());
+				printf("account tree:       %s\n", toHex(block.header.accountTreeRoot).c_str());
+				printf("validator tree:     %s\n", toHex(block.header.validatorTreeRoot).c_str());
 			}
 		}
 		else if (cmd == "transactions") {

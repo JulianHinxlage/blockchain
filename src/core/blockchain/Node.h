@@ -40,8 +40,8 @@ enum NodeState {
 
 class Node {
 public:
-	std::function<void(const Block&)> onBlockRecived;
-	std::function<void(const Transaction&)> onTransactionRecived;
+	std::function<void(const Block&)> onNewBlock;
+	std::function<void(const Transaction&)> onNewTransaction;
 
 	NetworkMode networkMode = NetworkMode::CLIENT;
 	VerifyMode verifyMode = VerifyMode::NO_VERIFY;
@@ -54,6 +54,7 @@ public:
 	
 	void init(const std::string& chainDir, const std::string& entryNodeFile);
 	void synchronize();
+	void synchronizePendingTransactions();
 	void verifyChain();
 	NodeState getState();
 

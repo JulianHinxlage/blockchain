@@ -4,7 +4,7 @@
 
 #include "BlockCreator.h"
 
-void BlockCreator::beginBlock(const EccPublicKey& validator, uint32_t slot, uint64_t timestamp) {
+void BlockCreator::beginBlock(const EccPublicKey& validator, const EccPublicKey& beneficiary, uint32_t slot, uint64_t timestamp) {
 	block = Block();
 	BlockHeader prev = blockChain->getBlockHeader(blockChain->getHeadBlock());
 	block.header.version = blockChain->config.blockVersion;
@@ -13,7 +13,7 @@ void BlockCreator::beginBlock(const EccPublicKey& validator, uint32_t slot, uint
 	block.header.blockNumber = prev.blockNumber + 1;
 	block.header.totalStakeAmount = prev.totalStakeAmount;
 	block.header.validator = validator;
-	block.header.beneficiary = validator;
+	block.header.beneficiary = beneficiary;
 	block.header.slot = slot;
 	block.header.seed = sha256((char*)&prev.seed, sizeof(prev.seed));
 	totalFees = 0;

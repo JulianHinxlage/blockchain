@@ -26,9 +26,12 @@ void Node::init(const std::string& chainDir, const std::string& entryNodeFile) {
 		fetcher.onBlockIn(block);
 	};
 	network.onTransactionRecived = [&](const Transaction& transaction) {
-		blockChain.addTransaction(transaction);
-		if (onTransactionRecived) {
-			onTransactionRecived(transaction);
+		if (!blockChain.hasTransaction(transaction.transactionHash)) {
+			blockChain.addTransaction(transaction);
+			blockChain.addPendingTransaction(transaction.transactionHash);
+			if (onNewTransaction) {
+				onNewTransaction(transaction);
+			}
 		}
 	};
 	network.onStateChanged = [&](NetworkState state) {
@@ -84,12 +87,18 @@ void Node::verify(const Block& block) {
 		if (blockChain.consensus.forkChoice(head, block.header)) {
 			blockChain.setHeadBlock(block.blockHash);
 			log(LogLevel::INFO, "Node", "new cain head num=%i tx=%i slot=%i hash=%s", block.header.blockNumber, block.header.transactionCount, block.header.slot, toHex(block.blockHash).c_str());
-			if (onBlockRecived) {
-				onBlockRecived(block);
+			for (auto& hash : block.transactionTree.transactionHashes) {
+				blockChain.removePendingTransaction(hash);
+			}
+			if (onNewBlock) {
+				onNewBlock(block);
 			}
 		}
 		else {
 			log(LogLevel::INFO, "Node", "valid block num=%i tx=%i slot=%i hash=%s", block.header.blockNumber, block.header.transactionCount, block.header.slot, toHex(block.blockHash).c_str());
+			for (auto& hash : block.transactionTree.transactionHashes) {
+				blockChain.removePendingTransaction(hash);
+			}
 		}
 	}
 	else {
@@ -130,6 +139,25 @@ void Node::synchronize() {
 		}
 	};
 	fetcher.synchronize();
+}
+
+void Node::synchronizePendingTransactions() {
+	network.getPendingTransactions([&](const std::vector<Hash>& hashes, PeerId peer) {
+		for (auto& hash : hashes) {
+			if (!blockChain.hasTransaction(hash)) {
+				network.getTransactions({ hash }, [&](const std::vector<Transaction>& transactions, PeerId peer) {
+					for (auto &transaction : transactions) {
+						if (network.onTransactionRecived) {
+							network.onTransactionRecived(transaction);
+						}
+					}
+				});
+			}
+			else {
+				blockChain.addPendingTransaction(hash);
+			}
+		}
+	});
 }
 
 void Node::verifyChain() {
