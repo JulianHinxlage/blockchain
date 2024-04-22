@@ -26,19 +26,16 @@ void Validator::init(const std::string& chainDir, const std::string& keyFile, co
 	node.storageMode = StorageMode::FULL;
 	node.verifyMode = VerifyMode::FULL_VERIFY;
 
-	/*
-	node.onNewTransaction = [&](const Transaction& transaction) {
-		node.blockChain.addPendingTransaction(transaction.transactionHash);
-	};
-	node.onNewBlock = [&](const Block& block) {
-		for (auto& hash : block.transactionTree.transactionHashes) {
-			node.blockChain.removePendingTransaction(hash);
-		}
-	};
-	*/
-
 	node.init(chainDir, entryNodeFile);
-	keyStore.loadOrCreate(keyFile);
+	if (!keyStore.init(keyFile)) {
+		keyStore.createFile(keyFile);
+		keyStore.generateMasterKey();
+		keyStore.generatePrivateKey(0, 0);
+		keyStore.setPassword("");
+	}
+	else {
+		keyStore.unlock("");
+	}
 
 	node.verifyChain();
 	node.synchronize();

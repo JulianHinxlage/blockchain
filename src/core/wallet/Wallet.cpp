@@ -11,7 +11,16 @@ void Wallet::init(const std::string& chainDir, const std::string& keyFile, const
 	node.verifyMode = VerifyMode::FULL_VERIFY;
 
 	node.init(chainDir, entryNodeFile);
-	keyStore.loadOrCreate(keyFile);	
+	if (!keyStore.init(keyFile)) {
+		keyStore.createFile(keyFile);
+		keyStore.generateMasterKey();
+		keyStore.generatePrivateKey(0, 0);
+		keyStore.setPassword("");
+		keyStore.save();
+	}
+	else {
+		keyStore.unlock("");
+	}
 
 	node.verifyChain();
 	node.synchronize();

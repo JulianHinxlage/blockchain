@@ -48,3 +48,18 @@ static T fromHex(const std::string& str) {
 	}
 	return t;
 }
+
+static std::string stringToHex(const std::string &str) {
+	return toHex((uint8_t*)str.data(), str.size());
+}
+
+static std::string stringfromHex(const std::string& str) {
+	std::string result;
+	for (int i = 0; i < str.size(); i += 2) {
+		uint8_t v = 0;
+		v |= hexCharToInt(str[i]) << 4;
+		v |= hexCharToInt(str[i + 1]) << 0;
+		result.push_back(v);
+	}
+	return result;
+}

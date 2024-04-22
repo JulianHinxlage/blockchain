@@ -3,7 +3,7 @@
 //
 
 #include "blockchain/Node.h"
-#include "blockchain/KeyStore.h"
+#include "storage/KeyStore.h"
 
 class Wallet {
 public:
