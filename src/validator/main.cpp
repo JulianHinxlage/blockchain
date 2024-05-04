@@ -5,6 +5,7 @@
 #include "validator/Validator.h"
 #include "util/log.h"
 #include "util/util.h"
+#include "util/Terminal.h"
 
 #include <iostream>
 #include <filesystem>
@@ -66,6 +67,12 @@ std::string search(std::string path) {
 }
 
 int main(int argc, char* argv[]) {
+	Terminal terminal;
+	terminal.init();
+	setLogCallback([&](LogLevel level, const std::string& category, const std::string& msg) {
+		terminal.println(msg.c_str());
+	});
+
 	int num = 0;
 	std::string name = "name";
 	if (argc > 0) {
@@ -81,11 +88,11 @@ int main(int argc, char* argv[]) {
 	validator.init(chainDir, keyFile, search("entry.txt"));
 
 
-	std::string line;
-	while (std::getline(std::cin, line)) {
-		auto args = split(line, " ", false);
+	while (true) {
+		std::string input = terminal.input("> ");
+		auto args = split(input, " ", false);
 		if (args.size() <= 0) {
-			printf("invalid input\n");
+			terminal.log("invalid input\n");
 			continue;
 		}
 		std::string cmd = args[0];
@@ -98,20 +105,20 @@ int main(int argc, char* argv[]) {
 			EccPublicKey address = validator.keyStore.getPublicKey();
 			Account account = validator.node.blockChain.getAccountTree().get(address);
 
-			printf("block count:  %i\n", validator.node.blockChain.getBlockCount());
-			printf("chain tip:    %s\n", toHex(validator.node.blockChain.getHeadBlock()).c_str());
-			printf("address:      %s\n", toHex(address).c_str());
-			printf("balance:      %s\n", amountToCoin(account.balance).c_str());
+			terminal.log("block count:  %i\n", validator.node.blockChain.getBlockCount());
+			terminal.log("chain tip:    %s\n", toHex(validator.node.blockChain.getHeadBlock()).c_str());
+			terminal.log("address:      %s\n", toHex(address).c_str());
+			terminal.log("balance:      %s\n", amountToCoin(account.balance).c_str());
 			if (account.stakeAmount != 0) {
-				printf("stake:        %s\n", amountToCoin(account.stakeAmount).c_str());
-				printf("stake block:  %llu\n", account.stakeBlockNumber);
-				printf("validator num:%llu\n", account.validatorNumber);
-				printf("stake owner:  %s\n", toHex(account.stakeOwner).c_str());
+				terminal.log("stake:        %s\n", amountToCoin(account.stakeAmount).c_str());
+				terminal.log("stake block:  %llu\n", account.stakeBlockNumber);
+				terminal.log("validator num:%llu\n", account.validatorNumber);
+				terminal.log("stake owner:  %s\n", toHex(account.stakeOwner).c_str());
 			}
-			printf("transactions: %u\n", account.transactionCount);
+			terminal.log("transactions: %u\n", account.transactionCount);
 		}
 		else {
-			printf("invalid command\n");
+			terminal.log("invalid command\n");
 		}
 	}
 	return 0;

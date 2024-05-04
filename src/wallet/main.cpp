@@ -5,6 +5,7 @@
 #include "wallet/Wallet.h"
 #include "util/util.h"
 #include "util/log.h"
+#include "util/Terminal.h"
 
 #include <filesystem>
 #include <iostream>
@@ -67,6 +68,12 @@ std::string search(std::string path) {
 }
 
 int main(int argc, char* argv[]) {
+	Terminal terminal;
+	terminal.init();
+	setLogCallback([&](LogLevel level, const std::string& category, const std::string& msg) {
+		terminal.println(msg.c_str());
+	});
+
 	int num = 0;
 	std::string name = "name";
 	if (argc > 0) {
@@ -82,11 +89,12 @@ int main(int argc, char* argv[]) {
 	wallet.init(chainDir, keyFile, search("entry.txt"));
 
 
-	std::string line;
-	while (std::getline(std::cin, line)) {
-		auto args = split(line, " ", false);
+	while (true) {
+		std::string input = terminal.input("> ");
+
+		auto args = split(input, " ", false);
 		if (args.size() <= 0) {
-			printf("invalid input\n");
+			terminal.log("invalid input\n");
 			continue;
 		}
 		std::string cmd = args[0];
@@ -100,17 +108,17 @@ int main(int argc, char* argv[]) {
 			EccPublicKey address = wallet.keyStore.getPublicKey();
 			Account account = wallet.getAccount();
 
-			printf("block count:   %i\n", wallet.node.blockChain.getBlockCount());
-			printf("chain tip:     %s\n", toHex(wallet.node.blockChain.getHeadBlock()).c_str());
-			printf("address:       %s\n", toHex(address).c_str());
-			printf("balance:       %s\n", amountToCoin(account.balance).c_str());
+			terminal.log("block count:   %i\n", wallet.node.blockChain.getBlockCount());
+			terminal.log("chain tip:     %s\n", toHex(wallet.node.blockChain.getHeadBlock()).c_str());
+			terminal.log("address:       %s\n", toHex(address).c_str());
+			terminal.log("balance:       %s\n", amountToCoin(account.balance).c_str());
 			if (account.stakeAmount != 0) {
-				printf("stake:         %s\n", amountToCoin(account.stakeAmount).c_str());
-				printf("stake block:   %llu\n", account.stakeBlockNumber);
-				printf("validator num: %llu\n", account.validatorNumber);
-				printf("stake owner:   %s\n", toHex(account.stakeOwner).c_str());
+				terminal.log("stake:         %s\n", amountToCoin(account.stakeAmount).c_str());
+				terminal.log("stake block:   %llu\n", account.stakeBlockNumber);
+				terminal.log("validator num: %llu\n", account.validatorNumber);
+				terminal.log("stake owner:   %s\n", toHex(account.stakeOwner).c_str());
 			}
-			printf("transactions:  %u\n", account.transactionCount);
+			terminal.log("transactions:  %u\n", account.transactionCount);
 		}
 		else if (cmd == "blocks") {
 
@@ -128,18 +136,18 @@ int main(int argc, char* argv[]) {
 				Block block = wallet.node.blockChain.getBlock(hash);
 
 				if (i != 0) {
-					printf("\n");
+					terminal.log("\n");
 				}
-				printf("block number:       %i\n", i);
-				printf("block slot:         %i\n", block.header.slot);
-				printf("transaction count:  %i\n", block.header.transactionCount);
-				printf("total stake amount: %s\n", amountToCoin(block.header.totalStakeAmount).c_str());
-				printf("block hash:         %s\n", toHex(hash).c_str());
-				printf("block seed:         %s\n", toHex(block.header.seed).c_str());
-				printf("block validator:    %s\n", toHex(block.header.validator).c_str());
-				printf("block beneficiary:  %s\n", toHex(block.header.beneficiary).c_str());
-				printf("account tree:       %s\n", toHex(block.header.accountTreeRoot).c_str());
-				printf("validator tree:     %s\n", toHex(block.header.validatorTreeRoot).c_str());
+				terminal.log("block number:       %i\n", i);
+				terminal.log("block slot:         %i\n", block.header.slot);
+				terminal.log("transaction count:  %i\n", block.header.transactionCount);
+				terminal.log("total stake amount: %s\n", amountToCoin(block.header.totalStakeAmount).c_str());
+				terminal.log("block hash:         %s\n", toHex(hash).c_str());
+				terminal.log("block seed:         %s\n", toHex(block.header.seed).c_str());
+				terminal.log("block validator:    %s\n", toHex(block.header.validator).c_str());
+				terminal.log("block beneficiary:  %s\n", toHex(block.header.beneficiary).c_str());
+				terminal.log("account tree:       %s\n", toHex(block.header.accountTreeRoot).c_str());
+				terminal.log("validator tree:     %s\n", toHex(block.header.validatorTreeRoot).c_str());
 			}
 		}
 		else if (cmd == "transactions") {
@@ -153,16 +161,16 @@ int main(int argc, char* argv[]) {
 					bool isSender = tx.header.sender == wallet.keyStore.getPublicKey();
 					bool isRecipient = tx.header.recipient == wallet.keyStore.getPublicKey();
 					if (isSender || isRecipient) {
-						printf("\n");
-						printf("tx number:      %i\n", (int)tx.header.transactionNumber);
-						printf("block number:   %i\n", (int)block.header.blockNumber);
-						printf("type:           %i\n", (int)tx.header.type);
-						printf("amount:         %s\n", amountToCoin(tx.header.amount).c_str());
+						terminal.log("\n");
+						terminal.log("tx number:      %i\n", (int)tx.header.transactionNumber);
+						terminal.log("block number:   %i\n", (int)block.header.blockNumber);
+						terminal.log("type:           %i\n", (int)tx.header.type);
+						terminal.log("amount:         %s\n", amountToCoin(tx.header.amount).c_str());
 						if (isSender) {
-							printf("-> to:      %s\n", toHex(tx.header.recipient).c_str());
+							terminal.log("-> to:      %s\n", toHex(tx.header.recipient).c_str());
 						}
 						if (isRecipient) {
-							printf("<- from:    %s\n", toHex(tx.header.sender).c_str());
+							terminal.log("<- from:    %s\n", toHex(tx.header.sender).c_str());
 						}
 					}
 				}
@@ -170,7 +178,7 @@ int main(int argc, char* argv[]) {
 		}
 		else if (cmd == "send") {
 			if (args.size() < 2) {
-				printf("usage: send <address> <amount> [fee] [type]");
+				terminal.log("usage: send <address> <amount> [fee] [type]\n");
 			}
 			else {
 				std::string address = args[0];
@@ -191,13 +199,45 @@ int main(int argc, char* argv[]) {
 						type = TransactionType::UNSTAKE;
 					}
 					else {
-						printf("invalid type");
+						terminal.log("invalid type");
+						continue;
+					}
+				}
+
+				if (wallet.keyStore.isLocked()) {
+					auto pass = terminal.passwordInput("password: ");
+					if (!wallet.keyStore.unlock(pass)) {
+						terminal.log("invalid password\n");
 						continue;
 					}
 				}
 
 				wallet.sendTransaction(address, amount, fee, type);
+
+				wallet.keyStore.lock();
 			}
+		}
+		else if (cmd == "password") {
+			if (wallet.keyStore.isLocked()) {
+				auto pass = terminal.passwordInput("password: ");
+				if (!wallet.keyStore.unlock(pass)) {
+					terminal.log("invalid password\n");
+					continue;
+				}
+			}
+
+			auto pass1 = terminal.passwordInput("new password: ");
+			auto pass2 = terminal.passwordInput("confirm new password: ");
+			if (pass1 == pass2) {
+				if (wallet.keyStore.setPassword(pass1)) {
+					terminal.log("new password set\n");
+				}
+			}
+			else {
+				terminal.log("password mismatch\n");
+			}
+
+			wallet.keyStore.lock();
 		}
 		else if (cmd == "test") {
 			wallet.sendTransaction(toHex(wallet.keyStore.getPublicKey()), "0", "0");
@@ -243,18 +283,18 @@ int main(int argc, char* argv[]) {
 			uint32_t beginTime = wallet.node.blockChain.getBlock(wallet.node.blockChain.getBlockHash(start)).header.timestamp;
 			uint32_t endTime = wallet.node.blockChain.getBlock(wallet.node.blockChain.getBlockHash(count-1)).header.timestamp;
 
-			printf("statistics for the last %i blocks\n", count - start);
-			printf("avg slot num:   %f\n", (float)slotSum / (float)slotSumCount);
-			printf("avg block time: %f\n", (float)(endTime - beginTime) / (float)statsCount);
+			terminal.log("statistics for the last %i blocks\n", count - start);
+			terminal.log("avg slot num:   %f\n", (float)slotSum / (float)slotSumCount);
+			terminal.log("avg block time: %f\n", (float)(endTime - beginTime) / (float)statsCount);
 			for (auto& i : slotCount) {
-				printf("slot %i occured %i times\n", i.first, i.second);
+				terminal.log("slot %i occured %i times\n", i.first, i.second);
 			}
 			for (auto& i : validatorCount) {
-				printf("validator %s occured %i times\n", toHex(i.first).c_str(), i.second);
+				terminal.log("validator %s occured %i times\n", toHex(i.first).c_str(), i.second);
 			}
 		}
 		else {
-			printf("invalid command\n");
+			terminal.log("invalid command\n");
 		}
 	}
 	return 0;
