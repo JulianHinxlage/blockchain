@@ -47,7 +47,7 @@ public:
 		genesisBlock.header.validator = 0;
 		genesisBlock.header.beneficiary = 0;
 		genesisBlock.header.slot = 0;
-		genesisBlock.header.seed = 0;
+		genesisBlock.header.rng = 0;
 		genesisBlock.header.transactionTreeRoot = genesisBlock.transactionTree.calculateRoot();
 		genesisBlock.header.accountTreeRoot = accountTree.getRoot();
 		genesisBlock.header.signature = 0;

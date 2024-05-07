@@ -15,7 +15,7 @@ void BlockCreator::beginBlock(const EccPublicKey& validator, const EccPublicKey&
 	block.header.validator = validator;
 	block.header.beneficiary = beneficiary;
 	block.header.slot = slot;
-	block.header.seed = sha256((char*)&prev.seed, sizeof(prev.seed));
+	block.header.rng = sha256((char*)&prev.rng, sizeof(prev.rng));
 	totalFees = 0;
 
 	accountTree = blockChain->getAccountTree(prev.accountTreeRoot);

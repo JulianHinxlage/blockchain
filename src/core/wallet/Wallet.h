@@ -2,12 +2,12 @@
 // Copyright (c) 2024 Julian Hinxlage. All rights reserved.
 //
 
-#include "blockchain/Node.h"
+#include "blockchain/FullNode.h"
 #include "storage/KeyStore.h"
 
 class Wallet {
 public:
-	Node node;
+	FullNode node;
 	KeyStore keyStore;
 	bool initContext = false;
 	VerifyContext context;

@@ -8,7 +8,7 @@
 
 EccPublicKey Consensus::selectNextValidator(const BlockHeader& block, uint32_t slot) {
 	Serializer serializer;
-	serializer.write(block.seed);
+	serializer.write(block.rng);
 	serializer.write(slot);
 	Hash rng = sha256(serializer.toString());
 

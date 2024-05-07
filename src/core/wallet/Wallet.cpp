@@ -8,7 +8,6 @@
 void Wallet::init(const std::string& chainDir, const std::string& keyFile, const std::string& entryNodeFile) {
 	node.networkMode = NetworkMode::SERVER;
 	node.storageMode = StorageMode::FULL;
-	node.verifyMode = VerifyMode::FULL_VERIFY;
 
 	node.init(chainDir, entryNodeFile);
 	if (!keyStore.init(keyFile)) {

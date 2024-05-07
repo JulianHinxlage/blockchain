@@ -18,7 +18,7 @@ public:
 	EccPublicKey validator = 0;
 	EccPublicKey beneficiary = 0;
 	uint32_t slot = 0;
-	Hash seed = 0;
+	Hash rng = 0;
 	Hash transactionTreeRoot = 0;
 	Hash accountTreeRoot = 0;
 	Hash validatorTreeRoot = 0;

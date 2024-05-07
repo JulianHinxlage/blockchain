@@ -24,7 +24,6 @@ Validator::~Validator() {
 void Validator::init(const std::string& chainDir, const std::string& keyFile, const std::string& entryNodeFile) {
 	node.networkMode = NetworkMode::SERVER;
 	node.storageMode = StorageMode::FULL;
-	node.verifyMode = VerifyMode::FULL_VERIFY;
 
 	node.init(chainDir, entryNodeFile);
 	if (!keyStore.init(keyFile)) {
@@ -45,7 +44,7 @@ void Validator::init(const std::string& chainDir, const std::string& keyFile, co
 	running = true;
 	thread = new std::thread([&]() {
 		while (running) {
-			if (node.getState() != NodeState::RUNNING) {
+			if (node.getState() != FullNodeState::RUNNING) {
 				std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 			}
 			else {

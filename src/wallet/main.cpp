@@ -143,7 +143,7 @@ int main(int argc, char* argv[]) {
 				terminal.log("transaction count:  %i\n", block.header.transactionCount);
 				terminal.log("total stake amount: %s\n", amountToCoin(block.header.totalStakeAmount).c_str());
 				terminal.log("block hash:         %s\n", toHex(hash).c_str());
-				terminal.log("block seed:         %s\n", toHex(block.header.seed).c_str());
+				terminal.log("block rng:         %s\n", toHex(block.header.rng).c_str());
 				terminal.log("block validator:    %s\n", toHex(block.header.validator).c_str());
 				terminal.log("block beneficiary:  %s\n", toHex(block.header.beneficiary).c_str());
 				terminal.log("account tree:       %s\n", toHex(block.header.accountTreeRoot).c_str());

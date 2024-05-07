@@ -16,13 +16,6 @@ enum class NetworkMode {
 	SERVER,
 };
 
-enum class VerifyMode {
-	NO_VERIFY,
-	MULTI_NODE_VOTE,
-	CONSENSUS_VERIFY,
-	FULL_VERIFY,
-};
-
 enum class StorageMode {
 	NO_STORAGE,
 	BLOCK_HEADERS,
@@ -30,7 +23,7 @@ enum class StorageMode {
 	FULL,
 };
 
-enum NodeState {
+enum FullNodeState {
 	INIT,
 	RUNNING,
 	VERIFY_CHAIN,
@@ -38,13 +31,12 @@ enum NodeState {
 	SYNCHRONISING_VERIFY,
 };
 
-class Node {
+class FullNode {
 public:
 	std::function<void(const Block&)> onNewBlock;
 	std::function<void(const Transaction&)> onNewTransaction;
 
 	NetworkMode networkMode = NetworkMode::CLIENT;
-	VerifyMode verifyMode = VerifyMode::NO_VERIFY;
 	StorageMode storageMode = StorageMode::NO_STORAGE;
 
 	BlockChain blockChain;
@@ -56,10 +48,10 @@ public:
 	void synchronize();
 	void synchronizePendingTransactions();
 	void verifyChain();
-	NodeState getState();
+	FullNodeState getState();
 
 private:
-	NodeState state;
+	FullNodeState state;
 	BlockFetcher fetcher;
 	ThreadedQueue<Block> verifyQueue;
 	std::map<Hash, Hash> pendingVerifies;

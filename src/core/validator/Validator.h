@@ -2,12 +2,12 @@
 // Copyright (c) 2024 Julian Hinxlage. All rights reserved.
 //
 
-#include "blockchain/Node.h"
+#include "blockchain/FullNode.h"
 #include "storage/KeyStore.h"
 
 class Validator {
 public:
-	Node node;
+	FullNode node;
 	KeyStore keyStore;
 	std::thread* thread;
 	std::atomic_bool running;

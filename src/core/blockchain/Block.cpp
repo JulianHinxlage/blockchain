@@ -22,7 +22,7 @@ void BlockHeader::sign(const EccPrivateKey& privateKey) {
 	serial.write(validator);
 	serial.write(beneficiary);
 	serial.write(slot);
-	serial.write(seed);
+	serial.write(rng);
 	serial.write(transactionTreeRoot);
 	serial.write(accountTreeRoot);
 	serial.write(validatorTreeRoot);
@@ -41,7 +41,7 @@ bool BlockHeader::verifySignature() const {
 	serial.write(validator);
 	serial.write(beneficiary);
 	serial.write(slot);
-	serial.write(seed);
+	serial.write(rng);
 	serial.write(transactionTreeRoot);
 	serial.write(accountTreeRoot);
 	serial.write(validatorTreeRoot);
@@ -60,7 +60,7 @@ std::string BlockHeader::serial() const {
 	serial.write(validator);
 	serial.write(beneficiary);
 	serial.write(slot);
-	serial.write(seed);
+	serial.write(rng);
 	serial.write(transactionTreeRoot);
 	serial.write(accountTreeRoot);
 	serial.write(validatorTreeRoot);
@@ -79,7 +79,7 @@ int BlockHeader::deserial(const std::string& str) {
 	serial.read(validator);
 	serial.read(beneficiary);
 	serial.read(slot);
-	serial.read(seed);
+	serial.read(rng);
 	serial.read(transactionTreeRoot);
 	serial.read(accountTreeRoot);
 	serial.read(validatorTreeRoot);

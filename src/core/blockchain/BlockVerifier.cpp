@@ -85,7 +85,7 @@ BlockError BlockVerifier::verifyBlockHeader(const BlockHeader& block, uint64_t u
 		return BlockError::INVALID_FUTURE_BLOCK;
 	}
 
-	if (block.seed != sha256((char*)&prev.header.seed, sizeof(prev.header.seed))) {
+	if (block.rng != sha256((char*)&prev.header.rng, sizeof(prev.header.rng))) {
 		return BlockError::INVALID_SEED;
 	}
 

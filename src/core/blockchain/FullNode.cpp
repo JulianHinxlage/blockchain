@@ -2,10 +2,10 @@
 // Copyright (c) 2024 Julian Hinxlage. All rights reserved.
 //
 
-#include "Node.h"
+#include "FullNode.h"
 #include "util/log.h"
 
-void Node::init(const std::string& chainDir, const std::string& entryNodeFile) {
+void FullNode::init(const std::string& chainDir, const std::string& entryNodeFile) {
 	network.blockChain = &blockChain;
 	creator.blockChain = &blockChain;
 	verifier.blockChain = &blockChain;
@@ -54,10 +54,10 @@ void Node::init(const std::string& chainDir, const std::string& entryNodeFile) {
 	};
 	verifyQueue.start();
 	fetcher.start();
-	state = NodeState::INIT;
+	state = FullNodeState::INIT;
 }
 
-void Node::verify(const Block& block) {
+void FullNode::verify(const Block& block) {
 	BlockError result = BlockError::NOT_CHECKED;;
 	BlockMetaData prevMeta = blockChain.getMetaData(block.header.previousBlockHash);
 	if (prevMeta.lastCheck == BlockError::NOT_CHECKED) {
@@ -114,26 +114,26 @@ void Node::verify(const Block& block) {
 
 	if (state == SYNCHRONISING_VERIFY) {
 		if (verifyQueue.empty()) {
-			state = NodeState::RUNNING;
+			state = FullNodeState::RUNNING;
 			log(LogLevel::INFO, "Node", "chain synchronisation finished");
 		}
 	}
 }
 
-void Node::synchronize() {
+void FullNode::synchronize() {
 	if (network.getState() != NetworkState::CONNECTED) {
 		synchronisationPending = true;
 		return;
 	}
 	synchronisationPending = false;
-	state = NodeState::SYNCHRONISING_FETCH;
+	state = FullNodeState::SYNCHRONISING_FETCH;
 	log(LogLevel::INFO, "Node", "chain synchronisation started");
 
 	fetcher.onSynchronized = [&]() {
-		if (state == NodeState::SYNCHRONISING_FETCH) {
-			state = NodeState::SYNCHRONISING_VERIFY;
+		if (state == FullNodeState::SYNCHRONISING_FETCH) {
+			state = FullNodeState::SYNCHRONISING_VERIFY;
 			if (verifyQueue.empty()) {
-				state = NodeState::RUNNING;
+				state = FullNodeState::RUNNING;
 				log(LogLevel::INFO, "Node", "chain synchronisation finished");
 			}
 		}
@@ -141,7 +141,7 @@ void Node::synchronize() {
 	fetcher.synchronize();
 }
 
-void Node::synchronizePendingTransactions() {
+void FullNode::synchronizePendingTransactions() {
 	network.getPendingTransactions([&](const std::vector<Hash>& hashes, PeerId peer) {
 		for (auto& hash : hashes) {
 			if (!blockChain.hasTransaction(hash)) {
@@ -160,8 +160,8 @@ void Node::synchronizePendingTransactions() {
 	});
 }
 
-void Node::verifyChain() {
-	state = NodeState::VERIFY_CHAIN;
+void FullNode::verifyChain() {
+	state = FullNodeState::VERIFY_CHAIN;
 	log(LogLevel::INFO, "Node", "start verifying blockchain");
 	int count = blockChain.getBlockCount();
 	int maxValidBlock = -1;
@@ -201,9 +201,9 @@ void Node::verifyChain() {
 		}
 	}
 	log(LogLevel::INFO, "Node", "finished verifying blockchain");
-	state = NodeState::INIT;
+	state = FullNodeState::INIT;
 }
 
-NodeState Node::getState() {
+FullNodeState FullNode::getState() {
 	return state;
 }
