@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.20)
 set(CMAKE_CXX_STANDARD 23)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(SOLUTION_NAME "Blockchain")
@@ -6,7 +6,7 @@ set(SOLUTION_NAME "Blockchain")
 if(WIN32)
     set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
     set(LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR})
-    set(USE_MSVC_RUNTIME_LIBRARY_DLL 1)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
 else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
     add_link_options(-no-pie)
@@ -33,12 +33,24 @@ project(core)
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/core/*.cpp src/core/*.h)
 add_library(${PROJECT_NAME} STATIC ${SOURCES})
 include_directories(${PROJECT_NAME} PUBLIC src/core)
+target_link_libraries(${PROJECT_NAME} PUBLIC ws2_32)
 set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER ${SOLUTION_NAME})
 
-set(OPENSSL_USE_STATIC_LIBS TRUE)
+#set(OPENSSL_USE_STATIC_LIBS TRUE)
 find_package(OpenSSL REQUIRED)
 target_include_directories(${PROJECT_NAME} PUBLIC ${OPENSSL_INCLUDE_DIR})
 target_link_libraries(${PROJECT_NAME} PUBLIC ${OPENSSL_LIBRARIES} OpenSSL::Crypto)
+
+
+
+### Core cAPI #########
+project(core_capi)
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/capi/*.cpp src/capi/*.h)
+add_library(${PROJECT_NAME} SHARED ${SOURCES})
+include_directories(${PROJECT_NAME} PUBLIC src/capi)
+target_link_libraries(${PROJECT_NAME} core)
+set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER ${SOLUTION_NAME})
+
 
 ### Wallet #########
 project(wallet)
@@ -56,6 +68,25 @@ add_executable(${PROJECT_NAME} ${SOURCES})
 include_directories(${PROJECT_NAME} PUBLIC src/validator)
 target_link_libraries(${PROJECT_NAME} core)
 set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER ${SOLUTION_NAME})
+
+### UI Wallet #########
+project(ui_wallet)
+set(CMAKE_PREFIX_PATH "C:/qt")
+find_package(Qt6 COMPONENTS Core Widgets)
+if(Qt6_FOUND)
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/ui_wallet/*.cpp src/ui_wallet/*.h)
+add_executable(${PROJECT_NAME} WIN32 ${SOURCES})
+include_directories(${PROJECT_NAME} PUBLIC src/ui_wallet)
+target_link_libraries(${PROJECT_NAME} core)
+set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER ${SOLUTION_NAME})
+target_link_libraries(${PROJECT_NAME} Qt6::Core Qt6::Widgets)
+else()
+add_custom_target(ui_wallet
+    COMMAND ${CMAKE_COMMAND} -E echo "Error: QT Library not found. This target cannot be built."
+    COMMAND ${CMAKE_COMMAND} -E false
+)
+set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER ${SOLUTION_NAME})
+endif()
 
 ### Test #########
 project(test)

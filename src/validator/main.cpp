@@ -110,7 +110,12 @@ int main(int argc, char* argv[]) {
 			terminal.log("address:      %s\n", toHex(address).c_str());
 			terminal.log("balance:      %s\n", amountToCoin(account.balance).c_str());
 			if (account.stakeAmount != 0) {
+
+				Amount totalStake = validator.node.blockChain.getBlock(validator.node.blockChain.getHeadBlock()).header.totalStakeAmount;
+
 				terminal.log("stake:        %s\n", amountToCoin(account.stakeAmount).c_str());
+				terminal.log("total stake:  %s\n", amountToCoin(totalStake).c_str());
+
 				terminal.log("stake block:  %llu\n", account.stakeBlockNumber);
 				terminal.log("validator num:%llu\n", account.validatorNumber);
 				terminal.log("stake owner:  %s\n", toHex(account.stakeOwner).c_str());

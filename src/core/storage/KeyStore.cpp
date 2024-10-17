@@ -103,8 +103,9 @@ void KeyStore::lock() {
 bool KeyStore::save() {
 	for (auto& seg : segments) {
 		if (seg.hasChange) {
-			seg.save();
-			seg.hasChange = false;
+			if (seg.save()) {
+				seg.hasChange = false;
+			}
 		}
 	}
 	saveFile();
@@ -337,7 +338,7 @@ bool KeyStore::Segment::unlock(const std::string& password) {
 bool KeyStore::Segment::load() {
 	if (encrypted) {
 		std::string content;
-		if (!aesDecrypt(stringfromHex(data), content, key, iv, tag)) {
+		if (!aesDecrypt(data, content, key, iv, tag)) {
 			return false;
 		}
 		if (deserial(content)) {
@@ -388,6 +389,7 @@ bool KeyStore::Segment::setPassword(const std::string& password) {
 		salt.resize(16);
 		secRandom((void*)salt.data(), salt.size());
 		key = pbkdf2(password, salt, 1000000);
+		return true;
 	}
 	else {
 		return false;
@@ -529,6 +531,9 @@ bool KeyStore::loadFile() {
 				seg.locked = false;
 				seg.load();
 			}
+			else {
+				seg.data = stringfromHex(seg.data);
+			}
 		}
 
 		return true;
@@ -556,7 +561,7 @@ void KeyStore::saveFile() {
 		}
 		else {
 			content += "beginData\n";
-			content += seg.data;
+			content += seg.data + "\n";
 			content += "endData\n";
 		}
 		content += "endSegment\n";

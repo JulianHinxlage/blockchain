@@ -20,6 +20,7 @@ void Wallet::init(const std::string& chainDir, const std::string& keyFile, const
 	else {
 		keyStore.unlock("");
 	}
+	initialized = true;
 
 	node.verifyChain();
 	node.synchronize();
@@ -45,12 +46,31 @@ void Wallet::sendTransaction(const std::string &address, const std::string& amou
 	}
 	else {
 		node.blockChain.addTransaction(transaction);
+		node.blockChain.addPendingTransaction(transaction.transactionHash);
 		log(LogLevel::INFO, "Wallet", "created transaction %s", toHex(transaction.transactionHash).c_str());
 		node.network.sendTransaction(transaction);
 	}
 }
 
 Account Wallet::getAccount() {
+	if (!initialized) {
+		return Account();
+	}
 	Account account = node.blockChain.getAccountTree().get(keyStore.getPublicKey());
 	return account;
+}
+
+Amount Wallet::getPendingBalance() {
+	Amount in = 0;
+	Amount out = 0;
+	for (auto& hash : node.blockChain.getPendingTransactions()) {
+		Transaction tx = node.blockChain.getTransaction(hash);
+		if (tx.header.recipient == keyStore.getPublicKey()) {
+			in += tx.header.amount;
+		}
+		if (tx.header.sender == keyStore.getPublicKey()) {
+			out += tx.header.amount;
+		}
+	}
+	return in - out;
 }
