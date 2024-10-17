@@ -42,8 +42,43 @@ int processCount(const std::string& name) {
 	return count;
 }
 #else
+#include <iostream>
+#include <string>
+#include <vector>
+#include <dirent.h>
+#include <fstream>
+#include <cstring>
+
+
 int processCount(const std::string& name) {
-	return 1;
+    int count = 0;
+    struct dirent* entry;
+    DIR* procDir = opendir("/proc");
+
+    if (!procDir) {
+        std::cerr << "Failed to open /proc directory" << std::endl;
+        return 0;
+    }
+
+    while ((entry = readdir(procDir)) != NULL) {
+        if (isdigit(entry->d_name[0])) {
+            std::string pidDir = std::string("/proc/") + entry->d_name;
+            std::ifstream cmdlineFile(pidDir + "/comm");
+
+            if (cmdlineFile.is_open()) {
+                std::string processName;
+                std::getline(cmdlineFile, processName);
+                cmdlineFile.close();
+
+                if (processName == name) {
+                    count++;
+                }
+            }
+        }
+    }
+
+    closedir(procDir);
+    return count;
 }
 #endif
 
@@ -143,7 +178,7 @@ int main(int argc, char* argv[]) {
 				terminal.log("transaction count:  %i\n", block.header.transactionCount);
 				terminal.log("total stake amount: %s\n", amountToCoin(block.header.totalStakeAmount).c_str());
 				terminal.log("block hash:         %s\n", toHex(hash).c_str());
-				terminal.log("block rng:         %s\n", toHex(block.header.rng).c_str());
+				terminal.log("block rng:          %s\n", toHex(block.header.rng).c_str());
 				terminal.log("block validator:    %s\n", toHex(block.header.validator).c_str());
 				terminal.log("block beneficiary:  %s\n", toHex(block.header.beneficiary).c_str());
 				terminal.log("account tree:       %s\n", toHex(block.header.accountTreeRoot).c_str());
@@ -255,7 +290,25 @@ int main(int argc, char* argv[]) {
 			wallet.node.verifyChain();
 		}
 		else if (cmd == "reset") {
-			wallet.node.blockChain.setHeadBlock(wallet.node.blockChain.getBlockHash(0));
+			if (args.size() < 1) {
+				terminal.log("usage: reset <block num>\n");
+			}
+			else {
+				try{
+					int num = std::stoi(args[0]);
+					if(num >= 0 && num < wallet.node.blockChain.getBlockCount()){
+						for(int i = wallet.node.blockChain.getBlockCount() - 1; i > num; i--){
+							Hash hash = wallet.node.blockChain.getBlockHash(i);
+							wallet.node.blockChain.removeBlock(hash);
+						}
+						wallet.node.blockChain.setHeadBlock(wallet.node.blockChain.getBlockHash(num));
+					}else{
+						terminal.log("invalid number\n");
+					}
+				} catch(...){
+					terminal.log("invalid number\n");
+				}
+			}
 		}
 		else if (cmd == "stats") {
 			int count = wallet.node.blockChain.getBlockCount();

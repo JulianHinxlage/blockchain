@@ -5,6 +5,7 @@
 #pragma once
 
 #include "Connection.h"
+#include <atomic>
 
 namespace net {
 

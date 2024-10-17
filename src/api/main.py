@@ -1,8 +1,9 @@
 
 import ctypes
+import threading
 from flask import Flask, jsonify, request
 
-blockchain = ctypes.CDLL('./core_capi.dll')
+blockchain = ctypes.CDLL('../libcore_capi.so')
 blockchain.init.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p]
 blockchain.init.restype = None
 blockchain.getBalance.argtypes = [ctypes.c_char_p]
@@ -27,8 +28,6 @@ blockchain.createTransaction.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctype
 blockchain.createTransaction.restype = ctypes.c_char_p
 blockchain.sendTransaction.argtypes = [ctypes.c_char_p]
 blockchain.sendTransaction.restype = ctypes.c_char_p
-
-blockchain.init(b"./chain", b"./key/key.txt", b"entry.txt")
 
 app = Flask(__name__)
 
@@ -55,8 +54,7 @@ def getTransactions():
 
 @app.route('/getPendingTransactions', methods=['GET'])
 def getPendingTransactions():
-    address = request.args.get('address', default="")
-    transactions = blockchain.getPendingTransactions(address.encode('utf-8')).decode('utf-8')
+    transactions = blockchain.getPendingTransactions().decode('utf-8')
     data = {"transactions": transactions}
     return jsonify(data)
 
@@ -119,5 +117,46 @@ def sendTransaction():
     data = {"value": value}
     return jsonify(data)
 
+@app.route('/getTransactionOverview', methods=['GET'])
+def getTransactionOverview():
+    address = request.args.get('address', default="")
+    
+    tx1 = blockchain.getPendingTransactionsForAddress(address.encode('utf-8')).decode('utf-8')
+    tx2 = blockchain.getTransactions(address.encode('utf-8')).decode('utf-8')
+    
+    tx = []
+    for i in tx1.split("\n"):
+        if i != "":
+            tx.append(i)
+    pendingNum = len(tx)
+    for i in reversed(tx2.split("\n")):
+        if i != "":
+            tx.append(i)
+    
+    num = 0
+    data = []
+    for i in tx:
+        amount = blockchain.getTransactionAmount(i.encode('utf-8')).decode('utf-8')
+        time = blockchain.getTransactionTime(i.encode('utf-8')).decode('utf-8')
+        sender = blockchain.getTransactionSender(i.encode('utf-8')).decode('utf-8')
+        recipient = blockchain.getTransactionRecipient(i.encode('utf-8')).decode('utf-8')
+        pending = num < pendingNum
+        data.append({
+            "hash":i,
+            "amount":amount,
+            "time":time,
+            "sender":sender,
+            "recipient":recipient,
+            "pending":pending,
+        })
+        num += 1
+
+    return jsonify(data)
+
+def run():
+    blockchain.init(b"./chain", b"./key/key.txt", b"entry.txt")
+
 if __name__ == '__main__':
-    app.run()
+    thr = threading.Thread(target=run, args=(), kwargs={})
+    thr.start()
+    app.run(host='0.0.0.0')

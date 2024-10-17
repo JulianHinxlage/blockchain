@@ -22,6 +22,10 @@ public:
 	Hash getRoot() {
 		if (rootHash == Hash(0)) {
 			rootHash = rootNode->calculateHash();
+			if(rootHash == Hash(-1)){
+				rootHash = Hash(0);
+				return Hash(-1);
+			}
 		}
 		return rootHash;
 	}

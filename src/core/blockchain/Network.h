@@ -10,6 +10,7 @@
 #include "util/Serializer.h"
 #include <map>
 #include <condition_variable>
+#include <atomic>
 
 enum class NetworkOpcode {
 	NOOP,

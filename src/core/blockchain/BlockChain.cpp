@@ -4,6 +4,7 @@
 
 #include "BlockChain.h"
 #include "util/hex.h"
+#include <algorithm>
 
 void BlockChain::init(const std::string& directory) {
 	this->directory = directory;
@@ -55,6 +56,11 @@ Block BlockChain::getBlock(const Hash& hash) {
 		block.blockHash = hash;
 	}
 	return block;
+}
+
+void BlockChain::removeBlock(const Hash &hash){
+	blockStorage.remove(hash);
+	metaData.erase(hash);
 }
 
 bool BlockChain::hasBlock(const Hash& hash) {
@@ -188,6 +194,7 @@ void BlockChain::loadBlockList() {
 	if (stream.is_open()) {
 		std::string line;
 		while (std::getline(stream, line)) {
+			line.erase(std::remove(line.begin(), line.end(), '\r' ), line.end());
 			blockList.push_back(fromHex<Hash>(line));
 		}
 	}

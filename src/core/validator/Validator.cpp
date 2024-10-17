@@ -82,7 +82,7 @@ void Validator::epoch() {
 
 	if (timePastInEpochMilli < 0) {
 		log(LogLevel::INFO, "Validator", "wait for epoch %i to begin", number);
-		std::this_thread::sleep_for(std::chrono::milliseconds(-timePastInEpochMilli));
+		std::this_thread::sleep_for(std::chrono::milliseconds(-timePastInEpochMilli + 1000));
 		timePastInEpochMilli = (nowMilli() - epochBeginTime * 1000);
 		startSlot = timePastInEpochMilli / 1000 / slotTime;
 	}
@@ -101,7 +101,7 @@ void Validator::epoch() {
 
 		if (timePastInSlotMillis < 0) {
 			log(LogLevel::INFO, "Validator", "wait for slot %i to begin", slot);
-			std::this_thread::sleep_for(std::chrono::milliseconds(-timePastInSlotMillis));
+			std::this_thread::sleep_for(std::chrono::milliseconds(-timePastInSlotMillis + 1000));
 			timePastInSlotMillis = (nowMilli() - slotBeginTime * 1000);
 		}
 

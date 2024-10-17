@@ -140,15 +140,39 @@ public:
 		}
 		else if (type == BinaryTreeNodeType::BRANCH) {
 			if (childs[0] == Hash(0)) {
-				childs[0] = nodes[0]->calculateHash();
+				if(nodes[0]){
+					childs[0] = nodes[0]->calculateHash();
+					if(childs[0] == Hash(-1)){
+						childs[0] = Hash(0);
+						return Hash(-1);
+					}
+				}else{
+					return Hash(-1);
+				}
 			}
 			if (childs[1] == Hash(0)) {
-				childs[1] = nodes[1]->calculateHash();
+				if(nodes[1]){
+					childs[1] = nodes[1]->calculateHash();
+					if(childs[1] == Hash(-1)){
+						childs[1] = Hash(0);
+						return Hash(-1);
+					}
+				}else{
+					return Hash(-1);
+				}
 			}
 		}
 		else if (type == BinaryTreeNodeType::EXTENSION) {
 			if (childs[0] == Hash(0)) {
-				childs[0] = nodes[0]->calculateHash();
+				if(nodes[0]){
+					childs[0] = nodes[0]->calculateHash();
+					if(childs[0] == Hash(-1)){
+						childs[0] = Hash(0);
+						return Hash(-1);
+					}
+				}else{
+					return Hash(-1);
+				}
 			}
 		}
 		Hash hash = sha256(serial());
@@ -329,6 +353,19 @@ public:
 					oldLeaf->value = value;
 				}
 				else {
+
+					if(nodes[0] == nullptr){
+						if (childs[0] == Hash(0)) {
+							return nullptr;
+						}
+						else {
+							auto node = std::make_shared<Node>();
+							node->storage = storage;
+							node->load(childs[0]);
+							nodes[0] = node;
+						}
+					}
+
 					if (pathLength <= match + 1) {
 						oldLeaf = nodes[0];
 					}
@@ -356,5 +393,6 @@ public:
 				return newLeaf.get();
 			}
 		}
+		return nullptr;
 	}
 };

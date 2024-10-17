@@ -133,6 +133,12 @@ BlockError BlockVerifier::verifyBlock(const Block& block, uint64_t unixTime) {
 	}
 	context.accountTree.set(block.header.beneficiary, beneficiaryAccount);
 
+	if(block.header.accountTreeRoot == Hash(-1)){
+		return BlockError::INVALID_ACCOUNT_TREE_ROOT;	
+	}
+	if(block.header.validatorTreeRoot == Hash(-1)){
+		return BlockError::INVALID_ACCOUNT_TREE_ROOT;	
+	}
 
 	if (context.accountTree.getRoot() != block.header.accountTreeRoot) {
 		return BlockError::INVALID_ACCOUNT_TREE_ROOT;
@@ -152,7 +158,7 @@ TransactionError BlockVerifier::verifyTransaction(const Transaction& transaction
 	return verifyTransaction(transaction, context);
 }
 
-TransactionError BlockVerifier::verifyTransaction(const Transaction& transaction, VerifyContext& context) {
+TransactionError BlockVerifier::verifyTransaction(const Transaction& transaction, VerifyContext& context, bool checkTransactionNumber) {
 	if (transaction.header.version != blockChain->config.transactionVersion) {
 		return TransactionError::INVALID_VERSION;
 	}
@@ -166,7 +172,9 @@ TransactionError BlockVerifier::verifyTransaction(const Transaction& transaction
 	if (transaction.header.type == TransactionType::TRANSFER) {
 		Account senderAccount = context.accountTree.get(transaction.header.sender);
 		if (transaction.header.transactionNumber != senderAccount.transactionCount) {
-			return TransactionError::INVALID_TRANSACTION_NUMBER;
+			if(checkTransactionNumber){
+				return TransactionError::INVALID_TRANSACTION_NUMBER;
+			}
 		}
 		senderAccount.transactionCount++;
 		if (!amountSub(senderAccount.balance, senderAccount.balance, transaction.header.amount)) {

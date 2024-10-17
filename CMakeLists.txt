@@ -1,5 +1,5 @@
-cmake_minimum_required(VERSION 3.20)
-set(CMAKE_CXX_STANDARD 23)
+cmake_minimum_required(VERSION 3.00)
+set(CMAKE_CXX_STANDARD 20)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(SOLUTION_NAME "Blockchain")
 
@@ -33,7 +33,11 @@ project(core)
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/core/*.cpp src/core/*.h)
 add_library(${PROJECT_NAME} STATIC ${SOURCES})
 include_directories(${PROJECT_NAME} PUBLIC src/core)
-target_link_libraries(${PROJECT_NAME} PUBLIC ws2_32)
+if(WIN32)
+    target_link_libraries(${PROJECT_NAME} PUBLIC ws2_32)
+else()
+    target_link_libraries(${PROJECT_NAME} PUBLIC pthread)
+endif()
 set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER ${SOLUTION_NAME})
 
 #set(OPENSSL_USE_STATIC_LIBS TRUE)
@@ -70,6 +74,7 @@ target_link_libraries(${PROJECT_NAME} core)
 set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER ${SOLUTION_NAME})
 
 ### UI Wallet #########
+if(WIN32)
 project(ui_wallet)
 set(CMAKE_PREFIX_PATH "C:/qt")
 find_package(Qt6 COMPONENTS Core Widgets)
@@ -87,12 +92,13 @@ add_custom_target(ui_wallet
 )
 set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER ${SOLUTION_NAME})
 endif()
+endif()
 
 ### Test #########
 project(test)
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/test/*.cpp src/test/*.h)
 add_executable(${PROJECT_NAME} ${SOURCES})
-include_directories(${PROJECT_NAME} PUBLIC src/test)
+include_directories(${PROJECT_NAME} PUBLIC src/test src)
 target_link_libraries(${PROJECT_NAME} core)
 set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER ${SOLUTION_NAME})
 

@@ -6,12 +6,17 @@
 
 #include "wallet/Wallet.h"
 #include "util/log.h"
+#include <filesystem>
 
 Wallet wallet;
 
 extern "C" {
 	
 	void init(const char *chainDir, const char* keyFile, const char* entryNodeFile) {
+		std::string pendingFile = std::string(chainDir) + "/pending.dat";
+		if(std::filesystem::exists(pendingFile)){
+			std::filesystem::remove(pendingFile);
+		}
 		wallet.init(chainDir, keyFile, entryNodeFile);
 	}
 
@@ -115,7 +120,7 @@ extern "C" {
 	}
 
 	const char* getPendingTransactions() {
-		static std::string data = "";
+		static thread_local std::string data = "";
 		data = "";
 
 		for (auto& hash : wallet.node.blockChain.getPendingTransactions()) {
@@ -161,6 +166,16 @@ extern "C" {
 		}
 
 		uint32_t transactionNumber = wallet.node.blockChain.getAccountTree().get(sender).transactionCount;
+
+		for (auto& hash : wallet.node.blockChain.getPendingTransactions()) {
+			Transaction tx = wallet.node.blockChain.getTransaction(hash);
+			if (tx.header.sender == sender) {
+				if(tx.header.transactionNumber == transactionNumber){
+					transactionNumber++;
+				}
+			}
+		}
+
 		Transaction transaction = wallet.node.creator.createTransaction(sender, recipient, transactionNumber, coinToAmount(amount), coinToAmount(fee), type);
 		
 		static thread_local std::string data = "";
@@ -176,7 +191,7 @@ extern "C" {
 		VerifyContext context = wallet.node.verifier.createContext(wallet.node.blockChain.getHeadBlock());
 
 		transaction.transactionHash = transaction.header.caclulateHash();
-		TransactionError error = wallet.node.verifier.verifyTransaction(transaction, context);
+		TransactionError error = wallet.node.verifier.verifyTransaction(transaction, context, false);
 
 
 		if (error != TransactionError::VALID) {

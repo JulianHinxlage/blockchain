@@ -3,10 +3,7 @@
 //
 
 #include "Terminal.h"
-
-#ifdef WIN32
-#include <Windows.h>
-#endif
+#include <stdarg.h>
 
 void Terminal::init() {
 	inputLine = "";
@@ -44,6 +41,22 @@ void Terminal::log(const char* fmt, ...) {
 	log(fmt, args);
 	va_end(args);
 }
+
+void Terminal::clearInputLine() {
+	int count = inputLine.size();
+	for (int i = 0; i < count; i++) {
+		printf("\b");
+	}
+	for (int i = 0; i < count; i++) {
+		printf(" ");
+	}
+	for (int i = 0; i < count; i++) {
+		printf("\b");
+	}
+}
+
+#ifdef WIN32
+#include <Windows.h>
 
 std::string Terminal::input(const std::string& prefix) {
 	inputLine = prefix;
@@ -186,15 +199,143 @@ std::string Terminal::passwordInput(const std::string& prefix, bool useAsterisk)
 	return input;
 }
 
-void Terminal::clearInputLine() {
-	int count = inputLine.size();
-	for (int i = 0; i < count; i++) {
-		printf("\b");
-	}
-	for (int i = 0; i < count; i++) {
-		printf(" ");
-	}
-	for (int i = 0; i < count; i++) {
-		printf("\b");
-	}
+#else
+#include <iostream>
+#include <string>
+#include <vector>
+#include <termios.h>
+#include <unistd.h>
+#include <cstdio>
+
+std::string Terminal::input(const std::string& prefix) {
+    inputLine = prefix;
+    std::cout << prefix;
+	std::cout.flush();
+
+    std::string input;
+    const char BACKSPACE = 127;
+    const char RETURN = '\n';
+    const char ESC = 27;
+
+    static struct termios oldt, newt;
+	tcgetattr(STDIN_FILENO, &oldt);
+	newt = oldt;
+	newt.c_lflag &= ~(ICANON | ECHO);
+	tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+
+    while (true) {
+        char ch;
+        ssize_t bytesRead = read(STDIN_FILENO, &ch, 1);
+
+        if (bytesRead == 1) {
+            if (ch == RETURN) {
+                std::cout << std::endl;
+				std::cout.flush();
+                break;
+            } else if (ch == BACKSPACE) {
+                if (!input.empty()) {
+                    std::cout << "\b \b";
+					std::cout.flush();
+                    input.pop_back();
+                    inputLine.pop_back();
+                }
+            } else if (ch == ESC) {
+                char seq[2];
+                read(STDIN_FILENO, &seq[0], 1);
+                read(STDIN_FILENO, &seq[1], 1);
+
+                if (seq[0] == '[') {
+                    if (seq[1] == 'A') {
+                        if (historyIndex == -1) {
+                            historyIndex = history.size() - 1;
+                            tmpHistory = input;
+                        } else if (historyIndex > 0) {
+                            historyIndex--;
+                        }
+
+                        if (historyIndex >= 0 && historyIndex < history.size()) {
+                            clearInputLine();
+                            input = history[historyIndex];
+                            inputLine = prefix + input;
+                            std::cout << inputLine;
+							std::cout.flush();
+                        }
+                    } else if (seq[1] == 'B') {
+                        if (historyIndex == -1) {
+                            historyIndex = history.size() - 1;
+                            tmpHistory = input;
+                        } else if (historyIndex < history.size()) {
+                            historyIndex++;
+                        }
+
+                        if (historyIndex >= 0 && historyIndex <= history.size()) {
+                            clearInputLine();
+                            if (historyIndex == history.size()) {
+                                input = tmpHistory;
+                            } else {
+                                input = history[historyIndex];
+                            }
+                            inputLine = prefix + input;
+                            std::cout << inputLine;
+							std::cout.flush();
+                        }
+                    }
+                }
+            } else {
+                std::cout << ch;
+				std::cout.flush();
+                input.push_back(ch);
+                inputLine.push_back(ch);
+            }
+        }
+    }
+
+	tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+
+    history.push_back(input);
+    inputLine = "";
+    tmpHistory = "";
+    historyIndex = -1;
+    return input;
 }
+
+std::string Terminal::passwordInput(const std::string& prefix, bool useAsterisk) {
+	std::string input;
+    const char BACKSPACE = 127;
+    const char RETURN = '\n';
+    std::cout << prefix;
+    fflush(stdout);
+
+    static struct termios oldt, newt;
+	tcgetattr(STDIN_FILENO, &oldt);
+	newt = oldt;
+	newt.c_lflag &= ~(ICANON | ECHO);
+	tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+
+    while (true) {
+        char ch;
+        ssize_t bytesRead = read(STDIN_FILENO, &ch, 1);
+
+        if (bytesRead == 1) {
+            if (ch == RETURN) {
+                std::cout << std::endl;
+                break;
+            } else if (ch == BACKSPACE) {
+                if (!input.empty()) {
+                    std::cout << "\b \b";
+                    input.pop_back();
+                }
+            } else {
+                if (useAsterisk) {
+                    std::cout << "*";
+                }
+                input.push_back(ch);
+            }
+        }
+    }
+
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+    return input;
+}
+
+#endif

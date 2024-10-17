@@ -38,6 +38,7 @@ public:
 	Transaction getTransaction(const Hash& hash);
 	BlockHeader getBlockHeader(const Hash& hash);
 	Block getBlock(const Hash &hash);
+	void removeBlock(const Hash &hash);
 
 	bool hasBlock(const Hash& hash);
 	bool hasTransaction(const Hash& hash);

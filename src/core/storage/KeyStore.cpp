@@ -13,6 +13,7 @@
 #include "util/Serializer.h"
 #include <fstream>
 #include <filesystem>
+#include <algorithm>
 
 bool KeyStore::init(const std::string& file) {
 	this->file = "";
@@ -417,6 +418,7 @@ bool KeyStore::loadFile() {
 		Segment seg;
 		std::string line;
 		while (std::getline(stream, line)) {
+			line.erase(std::remove(line.begin(), line.end(), '\r' ), line.end());
 			if (!line.empty()) {
 				auto parts = split(line, ":", true);
 				if (parts.size() > 0) {

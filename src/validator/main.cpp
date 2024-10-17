@@ -41,8 +41,43 @@ int processCount(const std::string& name) {
 	return count;
 }
 #else
+#include <iostream>
+#include <string>
+#include <vector>
+#include <dirent.h>
+#include <fstream>
+#include <cstring>
+
+
 int processCount(const std::string& name) {
-	return 1;
+    int count = 0;
+    struct dirent* entry;
+    DIR* procDir = opendir("/proc");
+
+    if (!procDir) {
+        std::cerr << "Failed to open /proc directory" << std::endl;
+        return 0;
+    }
+
+    while ((entry = readdir(procDir)) != NULL) {
+        if (isdigit(entry->d_name[0])) {
+            std::string pidDir = std::string("/proc/") + entry->d_name;
+            std::ifstream cmdlineFile(pidDir + "/comm");
+
+            if (cmdlineFile.is_open()) {
+                std::string processName;
+                std::getline(cmdlineFile, processName);
+                cmdlineFile.close();
+
+                if (processName == name) {
+                    count++;
+                }
+            }
+        }
+    }
+
+    closedir(procDir);
+    return count;
 }
 #endif
 

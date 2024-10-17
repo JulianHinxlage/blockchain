@@ -33,5 +33,5 @@ public:
 	//verifies a block including all transactions, note that it is assumed that the previous block is valid
 	BlockError verifyBlock(const Block& block, uint64_t unixTime);
 	TransactionError verifyTransaction(const Transaction& transaction);
-	TransactionError verifyTransaction(const Transaction& transaction, VerifyContext &context);
+	TransactionError verifyTransaction(const Transaction& transaction, VerifyContext &context, bool checkTransactionNumber = true);
 };
